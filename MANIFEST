@@ -1,0 +1,6 @@
+setup.cfg
+setup.py
+src/netns/__init__.py
+COPYING
+Makefile
+t/core.py
