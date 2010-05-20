@@ -13,10 +13,11 @@ install: all
 	./setup.py install
 
 test: all
+	retval=0; \
 	for i in `find "$(TEST)" -perm -u+x -type f`; do \
 		echo $$i; \
-		PYTHONPATH="$(BUILDDIR):$$PYTHONPATH" $$i || exit 1; \
-		done
+		PYTHONPATH="$(BUILDDIR):$$PYTHONPATH" $$i || retval=$$?; \
+		done; exit $$retval
 
 coverage: all
 	rm -f .coverage
