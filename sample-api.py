@@ -1,10 +1,17 @@
 #/usr/bin/env python
 # vim:ts=4:sw=4:et:ai:sts=4
 import netns
+import signal
 
 # run_as: user to setuid() to before running applications (this is assumed to
 # roon as root)
 netns.config.run_as = 'nobody'
+
+# Clean-up is essential to avoid leaving bridge devices all over the place
+# (luckily, the veths die automatically). This installs signals and exit
+# handlers.
+netns.set_cleanup_hooks(on_exit = True,
+        on_signals = [signal.SIGTERM, signal.SIGINT])
 
 # each Node is a netns
 a = netns.Node()
