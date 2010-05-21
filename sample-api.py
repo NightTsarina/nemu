@@ -21,7 +21,8 @@ print "Nodes started with pids: %d and %d" % (a.pid, b.pid)
 # interface object maps to a veth pair with one end in a netns
 if0 = a.add_if(mac_address = '42:71:e0:90:ca:42')
 if1 = b.add_if(mtu = 1492)
-if2 = b.add_tunnel_if() # tun device, for connecting to the outside world
+# for using with a tun device, to connect to the outside world
+if2 = b.import_if('tun0')
 
 # each Link is a linux bridge, all the parameters are applied to the associated
 # interfaces as tc qdiscs.
