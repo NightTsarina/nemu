@@ -19,6 +19,7 @@ b = netns.Node()
 print "Nodes started with pids: %d and %d" % (a.pid, b.pid)
 
 # interface object maps to a veth pair with one end in a netns
+# XXX: should it be named lladdr instead?
 if0 = a.add_if(mac_address = '42:71:e0:90:ca:42')
 if1 = b.add_if(mtu = 1492)
 # for using with a tun device, to connect to the outside world
