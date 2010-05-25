@@ -70,6 +70,9 @@ nodes = netns.get_nodes()
 links = netns.get_links()
 stats = link0.get_stats()
 
+# IDEA: implement Node.popen and build the others upon it.
+# IDEA: use SCM_RIGHTS to pass filedescriptors instead of using pipes/sockets
+
 # Run a process in background, associate its stdio to three named pipes
 app0 = a.start_process("ping -c 3 10.0.0.2")
 print "ping command PIPES at (%s, %s, %s)" % app0.pipes
