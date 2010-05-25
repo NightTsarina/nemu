@@ -50,6 +50,7 @@ class TestNode(unittest.TestCase):
             ipcmd.wait()
             return outdata.split("\n")
 
+        # Test automatic destruction
         orig_devs = len(get_devs())
         create_stuff()
         self.assertEquals(netns.get_nodes(), set())

@@ -45,13 +45,17 @@ link0.connect(if1)
 # ppp0 = netns.PPPLink(a, b, bandwidth = ....)
 # if0 = ppp0.interface(a)
 
-
 # Add and connect a tap device (as if a external router were plugged into a
 # switch)
 link0.add_tunnel_if()
 
+link0.enabled = True
+if0.enabled = True
+if1.enabled = True
+
 # addresses as iproute
 if0.add_v4_address(addr = '10.0.0.1', prefix_len = 24)
+if0.add_v6_address(addr = 'fe80::222:19ff:fe22:615d', prefix_len = 64)
 if1.add_v4_address(addr = '10.0.0.2', prefix_len = 24,
         broadcast = '10.1.0.255')
 

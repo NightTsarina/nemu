@@ -1,6 +1,11 @@
+COPYING
+Makefile
+sample-api.py
 setup.cfg
 setup.py
 src/netns/__init__.py
-COPYING
-Makefile
 t/core.py
+t/interfaces.py
+t/node.py
+t/subprocess.py
+t/routing.py
