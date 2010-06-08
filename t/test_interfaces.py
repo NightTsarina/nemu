@@ -147,10 +147,11 @@ class TestInterfaces(unittest.TestCase):
     def test_interface_addresses(self):
         node0 = netns.Node()
         if0 = node0.add_if()
-        if0.add_v4_address(addr = '10.0.0.1', prefix_len = 24,
+        if0.add_v4_address(address = '10.0.0.1', prefix_len = 24,
                 broadcast = '10.0.0.255')
-        if0.add_v4_address(addr = '10.0.2.1', prefix_len = 26)
-        if0.add_v6_address(addr = 'fe80::222:19ff:fe22:615d', prefix_len = 64)
+        if0.add_v4_address(address = '10.0.2.1', prefix_len = 26)
+        if0.add_v6_address(address = 'fe80::222:19ff:fe22:615d',
+                prefix_len = 64)
 
         devs = get_devs_netns(node0)
         self.assertTrue( {

@@ -18,23 +18,30 @@ class Node(object):
     def __init__(self):
         self.pid = 0
     def add_if(self, mac_address = None, mtu = None):
-        return Interface()
+        return Interface(mac_address, mtu)
+    def add_route(self, prefix, prefix_len, nexthop = None, interface = None):
+        assert nexthop or interface
+    def add_default_route(self, nexthop, interface = None):
+        return self.add_route('0.0.0.0', 0, nexthop, interface)
     def start_process(self, args):
         return Process()
     def run_process(self, args):
         return ("", "")
+    def get_routes(self):
+        return set()
 
 class Link(object):
     def connect(self, iface):
         pass
 
 class Interface(object):
-    def __init__(self):
+    def __init__(self, mac_address = None, mtu = None):
         self.name = None
-        self.mac_address = None
-    def add_v4_address(self, addr, prefix_len, broadcast = None):
+        self.mac_address = mac_address
+        self.mtu = mtu
+    def add_v4_address(self, address, prefix_len, broadcast = None):
         pass
-    def add_v6_address(self, addr, prefix_len):
+    def add_v6_address(self, address, prefix_len):
         pass
 
 class Process(object):
