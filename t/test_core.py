@@ -23,16 +23,17 @@ class TestConfigure(unittest.TestCase):
     def test_config_run_as_runtime(self):
         netns.config.run_as = (self.nobodyid or 65535)
         node = netns.Node()
-        app = a.start_process(["sleep", "1000"])
+        app = node.start_process(["sleep", "1000"])
         pid = app.pid
         # FIXME: non-portable *at all*
         stat = open("/proc/%d/status" % pid)
         while True:
             data = stat.readline()
-            fileds = data.split()
+            fields = data.split()
             if fields[0] != 'Uid:':
                 continue
             uid = fields[1]
+            break
         stat.close()
         self.assertEquals(uid, (self.nobodyid or 65535))
 

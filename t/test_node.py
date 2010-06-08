@@ -62,7 +62,7 @@ class TestNode(unittest.TestCase):
         if chld == 0:
             netns.set_cleanup_hooks(on_exit = True, on_signals = [])
             create_stuff()
-            sys.exit()
+            os._exit(0)
         os.waitpid(chld, 0)
         self.assertEquals(orig_devs, len(get_devs()))
 
@@ -75,7 +75,7 @@ class TestNode(unittest.TestCase):
             create_stuff()
             while True:
                 time.sleep(10)
-        os.kill(chld)
+        os.kill(chld, signal.SIGTERM)
         os.waitpid(chld, 0)
         self.assertEquals(orig_devs, len(get_devs()))
 
