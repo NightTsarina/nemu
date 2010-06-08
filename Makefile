@@ -35,7 +35,13 @@ clean:
 distclean: clean
 	rm -rf "$(DISTDIR)"
 
-dist:
+MANIFEST:
+	find . -path ./.hg -prune -o -path ./build -prune -o \
+		-name \*.pyc -prune -o -name \*.swp -prune -o \
+		-name MANIFEST -prune -o -type f -print | \
+		sed 's#^\./##' | sort > MANIFEST
+
+dist: MANIFEST
 	./setup.py sdist
 
-.PHONY: clean distclean dist test coverage install
+.PHONY: clean distclean dist test coverage install MANIFEST

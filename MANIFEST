@@ -4,8 +4,8 @@ sample-api.py
 setup.cfg
 setup.py
 src/netns/__init__.py
-t/core.py
-t/interfaces.py
-t/node.py
-t/subprocess.py
-t/routing.py
+t/test_core.py
+t/test_interfaces.py
+t/test_node.py
+t/test_routing.py
+t/test_subprocess.py
