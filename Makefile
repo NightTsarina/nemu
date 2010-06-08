@@ -25,7 +25,7 @@ coverage: all
 		set -e; \
 		PYTHONPATH="$(BUILDDIR):$$PYTHONPATH" $(COVERAGE) -x $$i; \
 		done
-	$(COVERAGE) -r -m `find "$(SRC)" -name \\*.py -type f`
+	$(COVERAGE) -r -m `find "$(BUILDDIR)" -name \\*.py -type f`
 	rm -f .coverage
 
 clean:
