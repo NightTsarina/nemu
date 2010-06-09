@@ -10,7 +10,7 @@ replies with 221 code.
 
 Command	Subcmd	Arguments	Response		Effect
 QUIT				221			Close the netns
-IF	LIST	[if#]		200 serialised data
+IF	LIST	[if#]		200 serialised data	ip link list
 IF	SET	if# key val	200/500			ip link set (1)
 IF	RTRN	if#		200/500			ip link set netns 1
 ADDR	LIST	[if#]		200 serialised data	ip addr list
@@ -42,3 +42,37 @@ command. Answers 200/500 after processing the file descriptor.
 
 (4) Secondary PROC commands, unconditionally end the PROC transaction. If RUN
 was successful, the process is started and the process ID is returned.
+
+
+Sample session
+--------------
+
+Parent calls socketpair(), fork() and unshare(); thus creating a new netns;
+protocol exchanges occur through the socket.
+
+<S> 220 Hello
+<C> IF LIST
+<S> 200-[{id: 1, mtu: 16436, name: lo, up: true}, {id: 10,
+<S> 200     lladdr: '12:34:56:78:9a:bc', mtu: 1500, name: eth0, up: true}]
+<C> IF SET 10 MTU 1492
+<S> 200 Ok.
+<C> ADDR ADD 10 10.0.0.1 24 10.0.0.255
+<S> 200 Ok.
+<C> ADDR DEL 10 192.168.1.1 24
+<S> 500 Address does not exist.
+<C> PROC CRTE 71
+<S> 354 Go ahead.
+<C> {args: [sh, -c, sleep, 10], cmd: /, exec: /bin/sh, gid: 100, uid: 100}
+<S> 200 Entering PROC mode.
+<C> PROC SIN
+<S> 354 Waiting for FD.
+ Server calls recvmsg()
+ Client calls sendmsg()
+<S> 200 FD received OK.
+<C> PROC RUN
+<S> 200 1649 pid process started.
+<C> PROC WAIT 1649
+ Time passes...
+<S> 200 0 exit code
+<C> QUIT
+<S> 221 Exiting...
