@@ -58,7 +58,7 @@ class Process(object):
         self.pid = os.getpid()
         self.valid = True
 
-import os, socket, sys
+import os, socket, sys, unshare
 class SlaveNode(object):
     def __init__(self):
         (s0, s1) = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM, 0)
@@ -69,10 +69,11 @@ class SlaveNode(object):
             self.sock = s0
             s1.close()
             return
-        s0.close()
-        self.sock = s1.makefile("r+")
-        self.ppid = ppid
         try:
+            s0.close()
+            #unshare.unshare(unshare.CLONE_NEWNET)
+            self.sock = s1.makefile("r+")
+            self.ppid = ppid
             self.run()
         except BaseException, e:
             sys.stderr.write("Error in slave node: %s\n" % str(e))
