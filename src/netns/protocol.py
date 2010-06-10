@@ -6,7 +6,8 @@ try:
     from yaml import CDumper as Dumper
 except ImportError:
     from yaml import Loader, Dumper
-#yaml.load(stream, Loader = Loader)
+
+import sys, yaml
 
 # Protocol definition
 #
@@ -17,6 +18,7 @@ except ImportError:
 
 _proto_commands = {
         "QUIT": { None: ("", "") },
+        "HELP": { None: ("", "") },
         "IF": {
             "LIST": ("", "i"),
             "SET":  ("iss", ""),
@@ -40,6 +42,8 @@ _proto_commands = {
         }
 # Commands valid only after PROC CRTE
 _proc_commands = {
+        "HELP": { None: ("", "") },
+        "QUIT": { None: ("", "") },
         "PROC": {
             "SIN":  ("", ""),
             "SOUT": ("", ""),
@@ -53,6 +57,7 @@ class Server(object):
     def __init__(self, fd):
         self.commands = _proto_commands
         self.closed = False
+        self.debug = True
         if hasattr(fd, "readline"):
             self.f = fd
         else:
@@ -63,6 +68,7 @@ class Server(object):
 
     def abort(self, str):
         # FIXME: this should be aware of the state of the server
+        # FIXME: cleanup
         self.reply(500, str)
         sys.stderr.write("Slave node aborting: %s\n" %str);
         os._exit(1)
@@ -70,9 +76,13 @@ class Server(object):
     def reply(self, code, text):
         if not hasattr(text, '__iter__'):
             text = [ text ]
-        for i in range(len(text) - 1):
-            self.f.write(str(code) + "-" + text[i] + "\n")
-        self.f.write(str(code) + " " + text[-1] + "\n")
+        clean = []
+        # Split lines with embedded \n
+        for i in text:
+            clean.extend(i.splitlines())
+        for i in range(len(clean) - 1):
+            self.f.write(str(code) + "-" + clean[i] + "\n")
+        self.f.write(str(code) + " " + clean[-1] + "\n")
         return
 
     def readline(self):
@@ -166,13 +176,94 @@ class Server(object):
             cmd = self.readcmd()
             if cmd == None:
                 continue
-            cmd[0](cmd[1], cmd[2])
+            if self.debug:
+                sys.stderr.write("Command: %s, args: %s\n" % (cmd[1], cmd[2]))
+            cmd[0](cmd[1], *cmd[2])
         try:
             self.f.close()
         except:
             pass
+        # FIXME: cleanup
 
-    def do_QUIT(self, cmdname, args):
+    def do_QUIT(self, cmdname):
         self.reply(221, "Sayounara.");
         self.closed = True
+
+    def do_IF_LIST(self, cmdname, ifnr = None):
+        pass
+    def do_IF_SET(self, cmdname, ifnr, key, val):
+        pass
+    def do_IF_RTRN(self, cmdname, ifnr, netns):
+        pass
+    def do_ADDR_LIST(self, cmdname, ifnr = None):
+        pass
+    def do_ADDR_ADD(self, cmdname, ifnr, address, prefixlen, broadcast = None):
+        pass
+    def do_ADDR_DEL(self, cmdname, ifnr, address, prefixlen):
+        pass
+    def do_ROUT_LIST(self, cmdname):
+        pass
+    def do_ROUT_ADD(self, cmdname, prefix, prefixlen, nexthop, ifnr):
+        pass
+    def do_ROUT_DEL(self, cmdname, prefix, prefixlen, nexthop, ifnr):
+        pass
+    def do_PROC_CRTE(self, cmdname, argslen = None):
+        if argslen:
+            self.reply(354, "Go ahead, reading %d bytes." % argslen)
+        else:
+            self.reply(354, "Go ahead, enter an empty line to finish.")
+        argsstr = self.readchunk(argslen)
+        if argsstr == None: # connection closed
+            return
+        if not argsstr:
+            self.reply(500, "Missing parameters.")
+            return
+        try:
+            args = yaml.load(argsstr, Loader = Loader)
+        except BaseException, e:
+            self.reply(500, "Cannot decode parameters: %s" % e)
+            return
+
+        if not hasattr(args, "items"):
+            self.reply(500, "Invalid parameters.")
+            return
+
+        valid_params = { 'cwd': str, 'exec': str, 'args': list, 'uid': int,
+                'gid': int }
+        for (k, v) in args.items():
+            try:
+                args[k] = valid_params[k](args[k])
+            except:
+                self.reply(500, "Invalid parameter: %s" % k)
+                return
+
+        required_params = [ 'exec', 'args', 'uid', 'gid' ]
+        for i in required_params:
+            if i not in args:
+                self.reply(500, "Missing required parameter: %s" % i)
+                return
+
+        if self.debug:
+            sys.stderr.write("Arguments for PROC CRTE: %s\n" % str(args))
+        self.reply(200, "Entering PROC mode.")
+
+        self._proc_args = args
+        self.commands = _proc_commands
+
+    def do_PROC_POLL(self, cmdname, pid):
+        pass
+    def do_PROC_WAIT(self, cmdname, pid):
+        pass
+    def do_PROC_SIN(self, cmdname):
+        pass
+    def do_PROC_SOUT(self, cmdname):
+        pass
+    def do_PROC_SERR(self, cmdname):
+        pass
+    def do_PROC_RUN(self, cmdname):
+        self.reply(200, "Aborted.")
+        self.commands = _proto_commands
+    def do_PROC_ABRT(self, cmdname):
+        self.reply(200, "Aborted.")
+        self.commands = _proto_commands
 

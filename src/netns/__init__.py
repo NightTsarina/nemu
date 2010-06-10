@@ -2,7 +2,7 @@
 # vim:ts=4:sw=4:et:ai:sts=4
 
 import os
-from netns.protocol import Server
+import netns.protocol
 
 class __Config(object):
     def __init__(self):
@@ -69,7 +69,7 @@ def spawn_slave():
         s1.close()
         return (pid, s0)
 
-    srv = Server(s1.fileno())
+    srv = netns.protocol.Server(s1.fileno())
     try:
         s0.close()
         #unshare.unshare(unshare.CLONE_NEWNET)
