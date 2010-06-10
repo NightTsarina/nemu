@@ -65,6 +65,9 @@ class SlaveNode(object):
         ppid = os.getpid()
         pid = os.fork()
         if pid:
+            helo = s0.recv(4096).rstrip().split(None, 1)
+            if int(helo[0]) / 100 != 2:
+                raise RuntimeError("Failed to start slave node: %s" % helo[1])
             self.pid = pid
             self.sock = s0
             s1.close()
@@ -76,7 +79,8 @@ class SlaveNode(object):
             self.ppid = ppid
             self.run()
         except BaseException, e:
-            sys.stderr.write("Error in slave node: %s\n" % str(e))
+            s1.send("500 %s\n" % str(e))
+            sys.stderr.write("Error starting slave node: %s\n" % str(e))
             os._exit(1)
         os._exit(0)
     def run(self):
