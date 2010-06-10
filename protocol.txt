@@ -12,7 +12,7 @@ Command	Subcmd	Arguments	Response		Effect
 QUIT				221			Close the netns
 IF	LIST	[if#]		200 serialised data	ip link list
 IF	SET	if# key val	200/500			ip link set (1)
-IF	RTRN	if#		200/500			ip link set netns 1
+IF	RTRN	if# ns		200/500			ip link set netns $ns
 ADDR	LIST	[if#]		200 serialised data	ip addr list
 ADDR	ADD	if# addr_spec	200/500			ip addr add
 ADDR	DEL	if# addr_spec	200/500			ip addr del
