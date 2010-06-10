@@ -3,6 +3,13 @@
 
 import os
 
+try:
+    from yaml import CLoader as Loader
+    from yaml import CDumper as Dumper
+except ImportError:
+    from yaml import Loader, Dumper
+#yaml.load(stream, Loader = Loader)
+
 class __Config(object):
     def __init__(self):
         self.run_as = None
@@ -16,7 +23,8 @@ def set_cleanup_hooks(on_exit = False, on_signals = []):
 
 class Node(object):
     def __init__(self):
-        self.pid = 0
+        self.slave = SlaveNode()
+        self.valid = True
     def add_if(self, mac_address = None, mtu = None):
         return Interface(mac_address, mtu)
     def add_route(self, prefix, prefix_len, nexthop = None, interface = None):
@@ -39,6 +47,7 @@ class Interface(object):
         self.name = None
         self.mac_address = mac_address
         self.mtu = mtu
+        self.valid = True
     def add_v4_address(self, address, prefix_len, broadcast = None):
         pass
     def add_v6_address(self, address, prefix_len):
@@ -47,3 +56,33 @@ class Interface(object):
 class Process(object):
     def __init__(self):
         self.pid = os.getpid()
+        self.valid = True
+
+import os, socket, sys
+class SlaveNode(object):
+    def __init__(self):
+        (s0, s1) = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM, 0)
+        ppid = os.getpid()
+        pid = os.fork()
+        if pid:
+            self.pid = pid
+            self.sock = s0
+            s1.close()
+            return
+        s0.close()
+        self.sock = s1.makefile("r+")
+        self.ppid = ppid
+        try:
+            self.run()
+        except BaseException, e:
+            sys.stderr.write("Error in slave node: %s\n" % str(e))
+            os._exit(1)
+        os._exit(0)
+    def run(self):
+        self.sock.write("220 Hello.\n");
+        while True:
+            line = self.sock.readline()
+            if not line:
+                break
+            self.sock.write("ECHO: %s\n" % line.rstrip())
+
