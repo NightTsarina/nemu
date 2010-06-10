@@ -2,29 +2,28 @@
 # vim:ts=4:sw=4:et:ai:sts=4
 
 import os
-
-try:
-    from yaml import CLoader as Loader
-    from yaml import CDumper as Dumper
-except ImportError:
-    from yaml import Loader, Dumper
-#yaml.load(stream, Loader = Loader)
+from netns.protocol import Server
 
 class __Config(object):
     def __init__(self):
         self.run_as = None
 
 config = __Config()
+__nodes = set()
 
 def get_nodes():
-    return set()
+    return set(__nodes)
+
 def set_cleanup_hooks(on_exit = False, on_signals = []):
     pass
 
 class Node(object):
     def __init__(self):
-        self.slave = SlaveNode()
+        self.slave_pid, self.slave_fd = spawn_slave()
         self.valid = True
+    @property
+    def pid(self):
+        return self.slave_pid
     def add_if(self, mac_address = None, mtu = None):
         return Interface(mac_address, mtu)
     def add_route(self, prefix, prefix_len, nexthop = None, interface = None):
@@ -58,36 +57,33 @@ class Process(object):
         self.pid = os.getpid()
         self.valid = True
 
-import os, socket, sys, unshare
-class SlaveNode(object):
-    def __init__(self):
-        (s0, s1) = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM, 0)
-        ppid = os.getpid()
-        pid = os.fork()
-        if pid:
-            helo = s0.recv(4096).rstrip().split(None, 1)
-            if int(helo[0]) / 100 != 2:
-                raise RuntimeError("Failed to start slave node: %s" % helo[1])
-            self.pid = pid
-            self.sock = s0
-            s1.close()
-            return
-        try:
-            s0.close()
-            #unshare.unshare(unshare.CLONE_NEWNET)
-            self.sock = s1.makefile("r+")
-            self.ppid = ppid
-            self.run()
-        except BaseException, e:
-            s1.send("500 %s\n" % str(e))
-            sys.stderr.write("Error starting slave node: %s\n" % str(e))
-            os._exit(1)
+import os, socket, sys, traceback, unshare
+def spawn_slave():
+    (s0, s1) = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM, 0)
+    #ppid = os.getpid()
+    pid = os.fork()
+    if pid:
+        helo = s0.recv(4096).rstrip().split(None, 1)
+        if int(helo[0]) / 100 != 2:
+            raise RuntimeError("Failed to start slave node: %s" % helo[1])
+        s1.close()
+        return (pid, s0)
+
+    srv = Server(s1.fileno())
+    try:
+        s0.close()
+        #unshare.unshare(unshare.CLONE_NEWNET)
+    except BaseException, e:
+        srv.abort(str(e))
+
+    # Try block just in case...
+    try:
+        srv.run()
+    except:
+        traceback.print_exc(file = sys.stderr)
+        os._exit(1)
+    else:
         os._exit(0)
-    def run(self):
-        self.sock.write("220 Hello.\n");
-        while True:
-            line = self.sock.readline()
-            if not line:
-                break
-            self.sock.write("ECHO: %s\n" % line.rstrip())
+    # NOTREACHED
+
 

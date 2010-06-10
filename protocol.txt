@@ -19,7 +19,7 @@ ADDR	DEL	if# addr_spec	200/500			ip addr del
 ROUT	LIST			200 serialised data	ip route list
 ROUT	ADD	route_spec	200/500			ip route add
 ROUT	DEL	route_spec	200/500			ip route del
-PROC	CRTE	args_len	354+200/500		(2)
+PROC	CRTE	[args_len]	354+200/500		(2)
 PROC	SIN			354+200/500		(3)
 PROC	SOUT			354+200/500		(3)
 PROC	SERR			354+200/500		(3)
@@ -32,8 +32,8 @@ PROC	KILL	<pid> <signal>	200/500			kill(pid, signal)
 (1) valid arguments: mtu <n>, state <up|down>, name <name>, lladdr <addr>
 
 (2) After PROC CRTE, only secondary PROC cmds are accepted until finished.
-Server waits for serialized data (lenght pre-specified) specifying complex
-arguments: cwd, env, argv.
+Server waits for serialized data (lenght pre-specified, or empty line to
+finish) specifying complex arguments: cwd, env, argv.
 After receiving the arguments, answers with 200 or 500.
 
 (3) Secondary PROC commands, only valid after PROC CRTE. Server reply 354 and
