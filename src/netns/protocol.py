@@ -1,13 +1,19 @@
 #!/usr/bin/env python
 # vim:ts=4:sw=4:et:ai:sts=4
 
+# FIXME:
+# Not only missing docs; this would be nicer if merged the spawn_slave
+# functionality also. need to investigate...
+
+
 try:
     from yaml import CLoader as Loader
     from yaml import CDumper as Dumper
 except ImportError:
     from yaml import Loader, Dumper
 
-import passfd, sys, yaml
+import base64, passfd, sys, yaml
+import netns.subprocess
 
 # Protocol definition
 #
@@ -38,6 +44,7 @@ _proto_commands = {
             "CRTE": ("iib", "b*"),
             "POLL": ("i", ""),
             "WAIT": ("i", "")
+            "KILL": ("i", "i")
             },
         }
 # Commands valid only after PROC CRTE
@@ -57,10 +64,17 @@ _proc_commands = {
 
 class Server(object):
     def __init__(self, fd):
+        # Dictionary of valid commands
         self.commands = _proto_commands
+        # Flag to stop the server
         self.closed = False
+        # Print debug info
         self.debug = True
+        # Dictionary to keep track of started processes
+        self._children = dict()
+        # Buffer and flag for PROC mode
         self._proc = None
+
         if hasattr(fd, "readline"):
             self.f = fd
         else:
@@ -175,8 +189,8 @@ class Server(object):
             elif argstemplate[j] == 'b':
                 try:
                     if args[i][0] == '=':
-                        args[i] = base64.b64decode(args[i])
-                except:
+                        args[i] = base64.b64decode(args[i][1:])
+                except TypeError:
                     self.reply(500, "Invalid parameter: not base-64 encoded.")
                     return None
             else:
@@ -215,24 +229,16 @@ class Server(object):
         self.reply(221, "Sayounara.");
         self.closed = True
 
-    def do_IF_LIST(self, cmdname, ifnr = None):
-        pass
-    def do_IF_SET(self, cmdname, ifnr, key, val):
-        pass
-    def do_IF_RTRN(self, cmdname, ifnr, netns):
-        pass
-    def do_ADDR_LIST(self, cmdname, ifnr = None):
-        pass
-    def do_ADDR_ADD(self, cmdname, ifnr, address, prefixlen, broadcast = None):
-        pass
-    def do_ADDR_DEL(self, cmdname, ifnr, address, prefixlen):
-        pass
-    def do_ROUT_LIST(self, cmdname):
-        pass
-    def do_ROUT_ADD(self, cmdname, prefix, prefixlen, nexthop, ifnr):
-        pass
-    def do_ROUT_DEL(self, cmdname, prefix, prefixlen, nexthop, ifnr):
-        pass
+#    def do_IF_LIST(self, cmdname, ifnr = None):
+#    def do_IF_SET(self, cmdname, ifnr, key, val):
+#    def do_IF_RTRN(self, cmdname, ifnr, netns):
+#    def do_ADDR_LIST(self, cmdname, ifnr = None):
+#    def do_ADDR_ADD(self, cmdname, ifnr, address, prefixlen, broadcast = None):
+#    def do_ADDR_DEL(self, cmdname, ifnr, address, prefixlen):
+#    def do_ROUT_LIST(self, cmdname):
+#    def do_ROUT_ADD(self, cmdname, prefix, prefixlen, nexthop, ifnr):
+#    def do_ROUT_DEL(self, cmdname, prefix, prefixlen, nexthop, ifnr):
+
     def do_PROC_CRTE(self, cmdname, uid, gid, file, *argv):
         self._proc = { 'uid': uid, 'gid': gid, 'file': file, 'argv': argv }
         self.commands = _proc_commands
@@ -271,15 +277,48 @@ class Server(object):
     do_PROC_SOUT = do_PROC_SERR = do_PROC_SIN
 
     def do_PROC_RUN(self, cmdname):
+        try:
+            chld = netns.subprocess.Subprocess(**self._proc)
+        except BaseException, e:
+            self.reply(500, "Failure starting process: %s" % str(e))
+            self._proc = None
+            self.commands = _proto_commands
+            return
+
+        self._children[chld.pid] = chld
         self._proc = None
         self.commands = _proto_commands
-        self.reply(200, "Aborted.")
+        self.reply(200, "%d running." % chld.pid)
+
     def do_PROC_ABRT(self, cmdname):
         self._proc = None
         self.commands = _proto_commands
         self.reply(200, "Aborted.")
 
     def do_PROC_POLL(self, cmdname, pid):
-        pass
-    def do_PROC_WAIT(self, cmdname, pid):
-        pass
+        if pid not in self._children:
+            self.reply(500, "Process does not exist.")
+            return
+        if cmdname == 'PROC POLL':
+            ret = self._children[pid].poll()
+        else:
+            ret = self._children[pid].wait()
+
+        if ret != None:
+            del self._children[pid]
+            self.reply(200, "%d exitcode." % ret)
+        else:
+            self.reply(450, "Not finished yet.")
+
+    do_PROC_WAIT = do_PROC_POLL
+
+    def do_PROC_KILL(self, cmdname, pid, signal):
+        if pid not in self._children:
+            self.reply(500, "Process does not exist.")
+            return
+        if signal:
+            self._children[pid].kill(signal)
+        else:
+            self._children[pid].kill()
+        self.reply(200, "Process signalled.")
+
