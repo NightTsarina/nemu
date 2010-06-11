@@ -27,7 +27,7 @@ PROC	SOUT			354+200/500		(4)
 PROC	SERR			354+200/500		(4)
 PROC	RUN			200 <pid>/500		(5)
 PROC	ABRT			200			(5)
-PROC	POLL	<pid>		200 <code>/500		check if process alive
+PROC	POLL	<pid>		200 <code>/450/500	check if process alive
 PROC	WAIT	<pid>		200 <code>/500		waitpid(pid)
 PROC	KILL	<pid> <signal>	200/500			kill(pid, signal)
 
@@ -47,8 +47,8 @@ waits for a file descriptor to be passed along with a duplicate of the same
 command. Answers 200/500 after processing the file descriptor.
 
 (5) Secondary PROC commands, unconditionally end the PROC transaction. If RUN
-was successful, the process is started and the process ID is returned.
-
+was successful, the process is started and the process ID is returned as the
+first token of the reply.
 
 Sample session
 --------------
@@ -66,10 +66,10 @@ protocol exchanges occur through the socket.
 <S> 200 Ok.
 <C> ADDR DEL 10 192.168.1.1 24
 <S> 500 Address does not exist.
-<C> PROC CRTE 71
-<S> 354 Go ahead.
-<C> {args: [sh, -c, sleep, 10], cmd: /, exec: /bin/sh, gid: 100, uid: 100}
+<C> PROC CRTE 100 100 /bin/sh sh -c sleep 10
 <S> 200 Entering PROC mode.
+<C> PROC CWD /
+<S> 200 CWD set to /.
 <C> PROC SIN
 <S> 354 Waiting for FD.
  Server calls recvmsg()
