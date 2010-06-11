@@ -63,6 +63,9 @@ _proc_commands = {
         }
 
 class Server(object):
+    """Class that implements the communication protocol and dispatches calls to
+    the required functions. Also works as the main loop for the slave
+    process."""
     def __init__(self, fd):
         # Dictionary of valid commands
         self.commands = _proto_commands
@@ -91,6 +94,7 @@ class Server(object):
         os._exit(1)
 
     def reply(self, code, text):
+        "Send back a reply to the client; handle multiline messages"
         if not hasattr(text, '__iter__'):
             text = [ text ]
         clean = []
@@ -103,6 +107,7 @@ class Server(object):
         return
 
     def readline(self):
+        "Read a line from the socket and detect connection break-up."
         line = self.f.readline()
         if not line:
             self.closed = True
@@ -110,6 +115,7 @@ class Server(object):
         return line.rstrip()
 
     def readchunk(self, size):
+        "Read a chunk of data limited by size or by an empty line."
         read = 0
         res = ""
 
@@ -127,6 +133,9 @@ class Server(object):
         return res
 
     def readcmd(self):
+        """Main entry point: read and parse a line from the client, handle
+        argument validation and return a tuple (function, command_name,
+        arguments)"""
         line = self.readline()
         if not line:
             return None
@@ -201,6 +210,8 @@ class Server(object):
         return (func, cmdname, args)
 
     def run(self):
+        """Main loop; reads commands until the server is shut down or the
+        connection is terminated."""
         self.reply(220, "Hello.");
         while not self.closed:
             cmd = self.readcmd()
@@ -215,6 +226,8 @@ class Server(object):
             pass
         # FIXME: cleanup
 
+    # Commands implementation
+
     def do_HELP(self, cmdname):
         reply = ["Available commands:"]
         for c in sorted(self.commands):
@@ -228,16 +241,6 @@ class Server(object):
     def do_QUIT(self, cmdname):
         self.reply(221, "Sayounara.");
         self.closed = True
-
-#    def do_IF_LIST(self, cmdname, ifnr = None):
-#    def do_IF_SET(self, cmdname, ifnr, key, val):
-#    def do_IF_RTRN(self, cmdname, ifnr, netns):
-#    def do_ADDR_LIST(self, cmdname, ifnr = None):
-#    def do_ADDR_ADD(self, cmdname, ifnr, address, prefixlen, broadcast = None):
-#    def do_ADDR_DEL(self, cmdname, ifnr, address, prefixlen):
-#    def do_ROUT_LIST(self, cmdname):
-#    def do_ROUT_ADD(self, cmdname, prefix, prefixlen, nexthop, ifnr):
-#    def do_ROUT_DEL(self, cmdname, prefix, prefixlen, nexthop, ifnr):
 
     def do_PROC_CRTE(self, cmdname, uid, gid, file, *argv):
         self._proc = { 'uid': uid, 'gid': gid, 'file': file, 'argv': argv }
@@ -274,6 +277,7 @@ class Server(object):
         self._proc[m[cmdname]] = fd
         self.reply(200, 'FD saved as %d.' % m[cmdname])
 
+    # Same code for the three commands
     do_PROC_SOUT = do_PROC_SERR = do_PROC_SIN
 
     def do_PROC_RUN(self, cmdname):
@@ -310,6 +314,7 @@ class Server(object):
         else:
             self.reply(450, "Not finished yet.")
 
+    # Same code for the two commands
     do_PROC_WAIT = do_PROC_POLL
 
     def do_PROC_KILL(self, cmdname, pid, signal):
@@ -321,4 +326,14 @@ class Server(object):
         else:
             self._children[pid].kill()
         self.reply(200, "Process signalled.")
+
+#    def do_IF_LIST(self, cmdname, ifnr = None):
+#    def do_IF_SET(self, cmdname, ifnr, key, val):
+#    def do_IF_RTRN(self, cmdname, ifnr, netns):
+#    def do_ADDR_LIST(self, cmdname, ifnr = None):
+#    def do_ADDR_ADD(self, cmdname, ifnr, address, prefixlen, broadcast = None):
+#    def do_ADDR_DEL(self, cmdname, ifnr, address, prefixlen):
+#    def do_ROUT_LIST(self, cmdname):
+#    def do_ROUT_ADD(self, cmdname, prefix, prefixlen, nexthop, ifnr):
+#    def do_ROUT_DEL(self, cmdname, prefix, prefixlen, nexthop, ifnr):
 
