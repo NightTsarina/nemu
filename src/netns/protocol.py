@@ -7,7 +7,7 @@ try:
 except ImportError:
     from yaml import Loader, Dumper
 
-import sys, yaml
+import passfd, sys, yaml
 
 # Protocol definition
 #
@@ -35,7 +35,7 @@ _proto_commands = {
             "DEL":  ("sisi", "")
             },
         "PROC": {
-            "CRTE": ("", "i"),
+            "CRTE": ("iib", "b*"),
             "POLL": ("i", ""),
             "WAIT": ("i", "")
             },
@@ -45,6 +45,8 @@ _proc_commands = {
         "HELP": { None: ("", "") },
         "QUIT": { None: ("", "") },
         "PROC": {
+            "CWD":  ("b", ""),
+            "ENV":  ("bb", "b*"),
             "SIN":  ("", ""),
             "SOUT": ("", ""),
             "SERR": ("", ""),
@@ -58,6 +60,7 @@ class Server(object):
         self.commands = _proto_commands
         self.closed = False
         self.debug = True
+        self._proc = None
         if hasattr(fd, "readline"):
             self.f = fd
         else:
@@ -150,22 +153,35 @@ class Server(object):
         if len(args) < len(mandatory):
             self.reply(500, "Missing mandatory arguments for %s." % cmdname)
             return None
-        if len(args) > len(argstemplate):
+        if (not argstemplate or argstemplate[-1] != "*") and \
+                len(args) > len(argstemplate):
             self.reply(500, "Too many arguments for %s." % cmdname)
             return None
 
+        j = 0
         for i in range(len(args)):
-            if argstemplate[i] == 'i':
+            if argstemplate[j] == '*':
+                j = j - 1
+
+            if argstemplate[j] == 'i':
                 try:
                     args[i] = int(args[i])
                 except:
                     self.reply(500, "Invalid parameter %s: must be an integer."
                             % args[i])
                     return None
-            elif argstemplate[i] == 's':
+            elif argstemplate[j] == 's':
                 pass
+            elif argstemplate[j] == 'b':
+                try:
+                    if args[i][0] == '=':
+                        args[i] = base64.b64decode(args[i])
+                except:
+                    self.reply(500, "Invalid parameter: not base-64 encoded.")
+                    return None
             else:
                 raise RuntimeError("Invalid argument template: %s" % _argstmpl)
+            j += 1
 
         func = getattr(self, funcname)
         return (func, cmdname, args)
@@ -184,6 +200,16 @@ class Server(object):
         except:
             pass
         # FIXME: cleanup
+
+    def do_HELP(self, cmdname):
+        reply = ["Available commands:"]
+        for c in sorted(self.commands):
+            for sc in sorted(self.commands[c]):
+                if sc:
+                    reply.append("%s %s" % (c, sc))
+                else:
+                    reply.append(c)
+        self.reply(200, reply)
 
     def do_QUIT(self, cmdname):
         self.reply(221, "Sayounara.");
@@ -207,63 +233,53 @@ class Server(object):
         pass
     def do_ROUT_DEL(self, cmdname, prefix, prefixlen, nexthop, ifnr):
         pass
-    def do_PROC_CRTE(self, cmdname, argslen = None):
-        if argslen:
-            self.reply(354, "Go ahead, reading %d bytes." % argslen)
-        else:
-            self.reply(354, "Go ahead, enter an empty line to finish.")
-        argsstr = self.readchunk(argslen)
-        if argsstr == None: # connection closed
-            return
-        if not argsstr:
-            self.reply(500, "Missing parameters.")
-            return
-        try:
-            args = yaml.load(argsstr, Loader = Loader)
-        except BaseException, e:
-            self.reply(500, "Cannot decode parameters: %s" % e)
-            return
-
-        if not hasattr(args, "items"):
-            self.reply(500, "Invalid parameters.")
-            return
-
-        valid_params = { 'cwd': str, 'exec': str, 'args': list, 'uid': int,
-                'gid': int }
-        for (k, v) in args.items():
-            try:
-                args[k] = valid_params[k](args[k])
-            except:
-                self.reply(500, "Invalid parameter: %s" % k)
-                return
-
-        required_params = [ 'exec', 'args', 'uid', 'gid' ]
-        for i in required_params:
-            if i not in args:
-                self.reply(500, "Missing required parameter: %s" % i)
-                return
-
-        if self.debug:
-            sys.stderr.write("Arguments for PROC CRTE: %s\n" % str(args))
+    def do_PROC_CRTE(self, cmdname, uid, gid, file, *argv):
+        self._proc = { 'uid': uid, 'gid': gid, 'file': file, 'argv': argv }
+        self.commands = _proc_commands
         self.reply(200, "Entering PROC mode.")
 
-        self._proc_args = args
-        self.commands = _proc_commands
+    def do_PROC_CWD(self, cmdname, dir):
+        self._proc['cwd'] = dir
+        self.reply(200, "CWD set to %s." % dir)
+
+    def do_PROC_ENV(self, cmdname, *env):
+        if len(env) % 2:
+            self.reply(500,
+                    "Invalid number of arguments for PROC ENV: must be even.")
+            return
+        self._proc['env'] = {}
+        for i in range(len(env)/2):
+            self._proc['env'][env[i * 2]] = env[i * 2 + 1]
+
+        self.reply(200, "%d environment definition(s) read." % (len(env) / 2))
+
+    def do_PROC_SIN(self, cmdname):
+        self.reply(354,
+                "Pass the file descriptor now, with '%s\\n' as payload." %
+                cmdname)
+        try:
+            fd, payload = passfd.recvfd(len(cmdname) + 1)
+            assert payload[0:len(cmdname)] == cmdname
+        except:
+            self.reply(500, "Invalid FD or payload.")
+            raise
+            return
+        m = {'PROC SIN': 'stdin', 'PROC SOUT': 'stdout', 'PROC SERR': 'stderr'}
+        self._proc[m[cmdname]] = fd
+        self.reply(200, 'FD saved as %d.' % m[cmdname])
+
+    do_PROC_SOUT = do_PROC_SERR = do_PROC_SIN
+
+    def do_PROC_RUN(self, cmdname):
+        self._proc = None
+        self.commands = _proto_commands
+        self.reply(200, "Aborted.")
+    def do_PROC_ABRT(self, cmdname):
+        self._proc = None
+        self.commands = _proto_commands
+        self.reply(200, "Aborted.")
 
     def do_PROC_POLL(self, cmdname, pid):
         pass
     def do_PROC_WAIT(self, cmdname, pid):
         pass
-    def do_PROC_SIN(self, cmdname):
-        pass
-    def do_PROC_SOUT(self, cmdname):
-        pass
-    def do_PROC_SERR(self, cmdname):
-        pass
-    def do_PROC_RUN(self, cmdname):
-        self.reply(200, "Aborted.")
-        self.commands = _proto_commands
-    def do_PROC_ABRT(self, cmdname):
-        self.reply(200, "Aborted.")
-        self.commands = _proto_commands
-
