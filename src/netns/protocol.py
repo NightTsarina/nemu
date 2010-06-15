@@ -12,7 +12,7 @@ try:
 except ImportError:
     from yaml import Loader, Dumper
 
-import base64, passfd, sys, yaml
+import base64, os, passfd, sys, yaml
 import netns.subprocess
 
 # Protocol definition
@@ -43,7 +43,7 @@ _proto_commands = {
         "PROC": {
             "CRTE": ("iib", "b*"),
             "POLL": ("i", ""),
-            "WAIT": ("i", "")
+            "WAIT": ("i", ""),
             "KILL": ("i", "i")
             },
         }
