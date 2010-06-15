@@ -12,7 +12,7 @@ try:
 except ImportError:
     from yaml import Loader, Dumper
 
-import base64, os, passfd, sys, yaml
+import base64, os, passfd, re, sys, yaml
 import netns.subprocess
 
 # Protocol definition
@@ -337,3 +337,90 @@ class Server(object):
 #    def do_ROUT_ADD(self, cmdname, prefix, prefixlen, nexthop, ifnr):
 #    def do_ROUT_DEL(self, cmdname, prefix, prefixlen, nexthop, ifnr):
 
+
+# ================
+
+class Client(object):
+    def __init__(self, fd):
+        if hasattr(fd, "readline"):
+            self.f = fd
+        else:
+            if hasattr(fd, "makefile"):
+                self.f = fd.makefile(fd, "r+", 1) # line buffered
+            else:
+                self.f = os.fdopen(fd, "r+", 1)
+
+    def _send_cmd(self, *args):
+        s = " ".join(map(str, args)) + "\n"
+        self.f.write(s)
+
+    def _read_reply(self):
+        """Reads a (possibly multi-line) response from the server. Returns a
+        tuple containing (code, text)"""
+        text = ""
+        while True:
+            line = self.f.readline().rstrip()
+            if not line:
+                raise RuntimeError("Protocol error, empty line received")
+
+            m = re.search(r'^(\d{3})([ -])(.*)', line)
+            if not m:
+                raise RuntimeError("Protocol error, read: %s" % line)
+            status = m.group(1)
+            text += m.group(3)
+            if m.group(2) == " ":
+                break
+        return (int(status), text)
+
+    def _read_and_check_reply(self, expected = 2):
+        "Reads a response and raises an exception if the code is not 2xx."
+        code, text = self._read_reply()
+        if code / 100 != expected:
+            raise "Error on command: %d %s" % (code, text)
+        return text
+
+    def shutdown(self):
+        "Tell the client to quit."
+        self._send_cmd(("QUIT", ))
+        self._read_and_check_reply()
+
+    def _send_fd(self, type, fd):
+        self._send_cmd("PROC", type)
+        self._read_and_check_reply(3)
+        passfd.sendfd(self.f.fileno(), fd, "PROC " + type)
+        self._read_and_check_reply()
+
+    def popen(self, uid, gid, file, argv = None, cwd = None, env = None,
+            stdin = None, stdout = None, stderr = None):
+        "Start a subprocess in the slave."
+
+        params = ["PROC", "CRTE", uid, gid, base64.b64encode(file)]
+        if argv:
+            for i in argv:
+                params.append(base64.b64encode(i))
+
+        self._send_cmd(*params)
+        self._read_and_check_reply()
+
+        if cwd:
+            self._send_cmd("PROC", "CWD", base64.b64encode(cwd))
+            self._read_and_check_reply()
+
+        if env:
+            params = []
+            for i in env:
+                params.append(base64.b64encode(i))
+            self._send_cmd("PROC", "ENV", params)
+            self._read_and_check_reply()
+
+        if stdin:
+            self._send_fd("SIN", stdin)
+        if stdout:
+            self._send_fd("SOUT", stdout)
+        if stderr:
+            self._send_fd("SERR", stderr)
+
+        self._send_cmd("PROC", "RUN")
+        pid = self._read_and_check_reply().split()[0]
+
+        return pid
