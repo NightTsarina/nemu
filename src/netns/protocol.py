@@ -424,3 +424,28 @@ class Client(object):
         pid = self._read_and_check_reply().split()[0]
 
         return pid
+
+    def poll(self, pid):
+        self._send_cmd("PROC", "POLL", pid)
+        code, text = self._read_reply()
+        if code / 100 == 2:
+            exitcode = text.split()[0]
+            return exitcode
+        if code / 100 == 4:
+            return Null
+        else:
+            raise "Error on command: %d %s" % (code, text)
+
+    def wait(self, pid):
+        self._send_cmd("PROC", "WAIT", pid)
+        text = self._read_and_check_reply()
+        exitcode = text.split()[0]
+        return exitcode
+
+    def kill(self, pid, signal = None):
+        if signal:
+            self._send_cmd("PROC", "KILL", pid, signal)
+        else:
+            self._send_cmd("PROC", "KILL", pid)
+        text = self._read_and_check_reply()
+
