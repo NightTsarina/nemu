@@ -4,7 +4,7 @@ import netns
 import signal
 
 # run_as: user to setuid() to before running applications (this is assumed to
-# roon as root)
+# run as root)
 netns.config.run_as = 'nobody'
 
 # Clean-up is essential to avoid leaving bridge devices all over the place
