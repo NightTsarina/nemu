@@ -459,29 +459,29 @@ class Slave(object):
         stdin/stdout/stderr can only be None or a open file descriptor."""
 
         params = ["PROC", "CRTE", uid, gid, base64.b64encode(file)]
-        if argv:
+        if argv != None:
             for i in argv:
                 params.append(base64.b64encode(i))
 
         self._send_cmd(*params)
         self._read_and_check_reply()
 
-        if cwd:
+        if cwd != None:
             self._send_cmd("PROC", "CWD", base64.b64encode(cwd))
             self._read_and_check_reply()
 
-        if env:
+        if env != None:
             params = []
             for i in env:
                 params.append(base64.b64encode(i))
             self._send_cmd("PROC", "ENV", params)
             self._read_and_check_reply()
 
-        if stdin:
+        if stdin != None:
             self._send_fd("SIN", stdin)
-        if stdout:
+        if stdout != None:
             self._send_fd("SOUT", stdout)
-        if stderr:
+        if stderr != None:
             self._send_fd("SERR", stderr)
 
         self._send_cmd("PROC", "RUN")
