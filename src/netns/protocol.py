@@ -1,21 +1,19 @@
 #!/usr/bin/env python
 # vim:ts=4:sw=4:et:ai:sts=4
 
-# FIXME:
-# Not only missing docs; this would be nicer if merged the spawn_slave
-# functionality also. need to investigate...
-
-
 try:
     from yaml import CLoader as Loader
     from yaml import CDumper as Dumper
 except ImportError:
     from yaml import Loader, Dumper
-
-import base64, os, passfd, re, sys, yaml
+import base64, os, passfd, re, signal, socket, sys, unshare, yaml
 import netns.subprocess
 
+# ============================================================================
+# Server-side protocol implementation
+#
 # Protocol definition
+# -------------------
 #
 # First key: command
 # Second key: sub-command or None
@@ -85,13 +83,6 @@ class Server(object):
                 self.f = fd.makefile(fd, "r+", 1) # line buffered
             else:
                 self.f = os.fdopen(fd, "r+", 1)
-
-    def abort(self, str):
-        # FIXME: this should be aware of the state of the server
-        # FIXME: cleanup
-        self.reply(500, str)
-        sys.stderr.write("Slave node aborting: %s\n" %str);
-        os._exit(1)
 
     def reply(self, code, text):
         "Send back a reply to the client; handle multiline messages"
@@ -337,18 +328,71 @@ class Server(object):
 #    def do_ROUT_ADD(self, cmdname, prefix, prefixlen, nexthop, ifnr):
 #    def do_ROUT_DEL(self, cmdname, prefix, prefixlen, nexthop, ifnr):
 
+# ============================================================================
+#
+# Client-side protocol implementation, and slave process creation
+#
+# Handle the creation of the child; parent gets (fd, pid), child never returns
+def _start_child():
+    # Create socket pair to communicate
+    (s0, s1) = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM, 0)
+    # Spawn a child that will run in a loop
+    pid = os.fork()
+    if pid:
+        s1.close()
+        return (s0, pid)
 
-# ================
+    try:
+        s0.close()
+        srv = Server(s1)
+        #unshare.unshare(unshare.CLONE_NEWNET)
+    except BaseException, e:
+        s = "Slave node aborting: %s\n" % str(e)
+        try:
+            # try to pass the error to parent, if possible
+            s0.write("500 " + e)
+        except:
+            pass
+        sys.stderr.write(e)
+        os._exit(1)
 
-class Client(object):
-    def __init__(self, fd):
-        if hasattr(fd, "readline"):
-            self.f = fd
-        else:
-            if hasattr(fd, "makefile"):
-                self.f = fd.makefile(fd, "r+", 1) # line buffered
+    # Try block just in case...
+    try:
+        srv.run()
+    except:
+        os._exit(1)
+    else:
+        os._exit(0)
+    # NOTREACHED
+
+class Slave(object):
+    """Class to create and manage slave processes."""
+    def __init__(self, fd = None, pid = None):
+        """When called without arguments, it will fork, create a new network
+        namespace and enter a loop to serve requests from the master. The
+        parent process will return an object which is used to control the slave
+        thru RPC-like calls.
+
+        If fd and pid are specified, the slave process is not created; fd is
+        used as a control socket and pid is assumed to be the pid of the slave
+        process."""
+        if fd and pid:
+            # If fd is passed do not fork or anything
+            if hasattr(fd, "readline"):
+                pass # fd ok
             else:
-                self.f = os.fdopen(fd, "r+", 1)
+                if hasattr(fd, "makefile"):
+                    fd = fd.makefile("r+", 1) # line buffered
+                else:
+                    fd = os.fdopen(fd, "r+", 1)
+        else:
+            f, pid = _start_child()
+            fd = f.makefile("r+", 1) # line buffered
+
+        self._pid = pid
+        self._fd = fd
+        # Wait for slave to send banner
+        self._read_and_check_reply()
 
     def _send_cmd(self, *args):
         s = " ".join(map(str, args)) + "\n"
@@ -373,7 +417,9 @@ class Client(object):
         return (int(status), text)
 
     def _read_and_check_reply(self, expected = 2):
-        "Reads a response and raises an exception if the code is not 2xx."
+        """Reads a response and raises an exception if the first digit of the
+        code is not the expected value. If expected is not specified, it
+        defaults to 2."""
         code, text = self._read_reply()
         if code / 100 != expected:
             raise "Error on command: %d %s" % (code, text)
@@ -385,6 +431,7 @@ class Client(object):
         self._read_and_check_reply()
 
     def _send_fd(self, type, fd):
+        "Pass a file descriptor"
         self._send_cmd("PROC", type)
         self._read_and_check_reply(3)
         passfd.sendfd(self.f.fileno(), fd, "PROC " + type)
@@ -392,7 +439,9 @@ class Client(object):
 
     def popen(self, uid, gid, file, argv = None, cwd = None, env = None,
             stdin = None, stdout = None, stderr = None):
-        "Start a subprocess in the slave."
+        """Start a subprocess in the slave; the interface resembles
+        subprocess.Popen, but with less functionality. In particular
+        stdin/stdout/stderr can only be None or a open file descriptor."""
 
         params = ["PROC", "CRTE", uid, gid, base64.b64encode(file)]
         if argv:
@@ -426,6 +475,8 @@ class Client(object):
         return pid
 
     def poll(self, pid):
+        """Equivalent to Popen.poll(), checks if the process has finished.
+        Returns the exitcode if finished, None otherwise."""
         self._send_cmd("PROC", "POLL", pid)
         code, text = self._read_reply()
         if code / 100 == 2:
@@ -437,15 +488,20 @@ class Client(object):
             raise "Error on command: %d %s" % (code, text)
 
     def wait(self, pid):
+        """Equivalent to Popen.wait(). Waits for the process to finish and
+        returns the exitcode."""
         self._send_cmd("PROC", "WAIT", pid)
         text = self._read_and_check_reply()
         exitcode = text.split()[0]
         return exitcode
 
-    def kill(self, pid, signal = None):
-        if signal:
-            self._send_cmd("PROC", "KILL", pid, signal)
+    def kill(self, pid, sig = signal.SIGTERM):
+        """Equivalent to Popen.send_signal(). Sends a signal to the child
+        process; signal defaults to SIGTERM."""
+        if sig:
+            self._send_cmd("PROC", "KILL", pid, sig)
         else:
             self._send_cmd("PROC", "KILL", pid)
         text = self._read_and_check_reply()
+
 

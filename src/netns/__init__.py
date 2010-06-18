@@ -19,8 +19,8 @@ def set_cleanup_hooks(on_exit = False, on_signals = []):
 
 class Node(object):
     def __init__(self):
-        self.slave_pid, self.slave_fd = spawn_slave()
-        self.valid = True
+        self._slave = netns.protocol.Slave()
+        self._valid = True
     @property
     def pid(self):
         return self.slave_pid
@@ -56,34 +56,5 @@ class Process(object):
     def __init__(self):
         self.pid = os.getpid()
         self.valid = True
-
-import os, socket, sys, traceback, unshare
-def spawn_slave():
-    (s0, s1) = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM, 0)
-    #ppid = os.getpid()
-    pid = os.fork()
-    if pid:
-        helo = s0.recv(4096).rstrip().split(None, 1)
-        if int(helo[0]) / 100 != 2:
-            raise RuntimeError("Failed to start slave node: %s" % helo[1])
-        s1.close()
-        return (pid, s0)
-
-    srv = netns.protocol.Server(s1.fileno())
-    try:
-        s0.close()
-        #unshare.unshare(unshare.CLONE_NEWNET)
-    except BaseException, e:
-        srv.abort(str(e))
-
-    # Try block just in case...
-    try:
-        srv.run()
-    except:
-        traceback.print_exc(file = sys.stderr)
-        os._exit(1)
-    else:
-        os._exit(0)
-    # NOTREACHED
 
 
