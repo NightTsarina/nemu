@@ -80,7 +80,7 @@ class Server(object):
             self.f = fd
         else:
             if hasattr(fd, "makefile"):
-                self.f = fd.makefile(fd, "r+", 1) # line buffered
+                self.f = fd.makefile("r+", 1) # line buffered
             else:
                 self.f = os.fdopen(fd, "r+", 1)
 
@@ -350,10 +350,10 @@ def _start_child():
         s = "Slave node aborting: %s\n" % str(e)
         try:
             # try to pass the error to parent, if possible
-            s0.write("500 " + e)
+            s1.send("500 " + s)
         except:
             pass
-        sys.stderr.write(e)
+        sys.stderr.write(s)
         os._exit(1)
 
     # Try block just in case...
@@ -366,7 +366,8 @@ def _start_child():
     # NOTREACHED
 
 class Slave(object):
-    """Class to create and manage slave processes."""
+    """Class to create and manage slave processes; it is at the same time a
+    client implementation for the communication protocol."""
     def __init__(self, fd = None, pid = None):
         """When called without arguments, it will fork, create a new network
         namespace and enter a loop to serve requests from the master. The
@@ -396,14 +397,14 @@ class Slave(object):
 
     def _send_cmd(self, *args):
         s = " ".join(map(str, args)) + "\n"
-        self.f.write(s)
+        self._fd.write(s)
 
     def _read_reply(self):
         """Reads a (possibly multi-line) response from the server. Returns a
         tuple containing (code, text)"""
         text = ""
         while True:
-            line = self.f.readline().rstrip()
+            line = self._fd.readline().rstrip()
             if not line:
                 raise RuntimeError("Protocol error, empty line received")
 
@@ -422,7 +423,7 @@ class Slave(object):
         defaults to 2."""
         code, text = self._read_reply()
         if code / 100 != expected:
-            raise "Error on command: %d %s" % (code, text)
+            raise RuntimeError("Error from slave: %d %s" % (code, text))
         return text
 
     def shutdown(self):
@@ -434,7 +435,7 @@ class Slave(object):
         "Pass a file descriptor"
         self._send_cmd("PROC", type)
         self._read_and_check_reply(3)
-        passfd.sendfd(self.f.fileno(), fd, "PROC " + type)
+        passfd.sendfd(self._fd.fileno(), fd, "PROC " + type)
         self._read_and_check_reply()
 
     def popen(self, uid, gid, file, argv = None, cwd = None, env = None,
