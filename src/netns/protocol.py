@@ -79,9 +79,13 @@ class Server(object):
         if hasattr(fd, "readline"):
             self._fd = fd
         else:
+            # Since openfd insists on closing the fd on destruction, I need to
+            # dup()
             if hasattr(fd, "fileno"):
-                fd = fd.fileno()
-            self._fd = os.fdopen(fd, "r+", 1)
+                nfd = os.dup(fd.fileno())
+            else:
+                nfd = os.dup(fd)
+            self._fd = os.fdopen(nfd, "r+", 1)
 
     def reply(self, code, text):
         "Send back a reply to the client; handle multiline messages"
@@ -196,6 +200,9 @@ class Server(object):
                 try:
                     if args[i][0] == '=':
                         args[i] = base64.b64decode(args[i][1:])
+                    if len(args[i]) == 0:
+                        self.reply(500, "Invalid parameter: empty.")
+                        return None
                 except TypeError:
                     self.reply(500, "Invalid parameter: not base-64 encoded.")
                     return None
@@ -390,17 +397,20 @@ class Slave(object):
         If fd and pid are specified, the slave process is not created; fd is
         used as a control socket and pid is assumed to be the pid of the slave
         process."""
-        if fd and pid:
-            # If fd is passed do not fork or anything
-            if hasattr(fd, "readline"):
-                pass # fd ok
+        # If fd is passed do not fork or anything
+        if not (fd and pid):
+            fd, pid = _start_child(debug)
+
+        # XXX: In some cases we do not call dup(); maybe this should be
+        # consistent?
+        if not hasattr(fd, "readline"):
+            # Since openfd insists on closing the fd on destruction, I need to
+            # dup()
+            if hasattr(fd, "fileno"):
+                nfd = os.dup(fd.fileno())
             else:
-                if hasattr(fd, "fileno"):
-                    fd = fd.fileno()
-                fd = os.fdopen(fd, "r+", 1)
-        else:
-            f, pid = _start_child(debug)
-            fd = os.fdopen(f.fileno(), "r+", 1)
+                nfd = os.dup(fd)
+            fd = os.fdopen(nfd, "r+", 1)
 
         self._pid = pid
         self._fd = fd
