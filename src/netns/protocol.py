@@ -79,10 +79,9 @@ class Server(object):
         if hasattr(fd, "readline"):
             self._fd = fd
         else:
-            if hasattr(fd, "makefile"):
-                self._fd = fd.makefile("r+", 1) # line buffered
-            else:
-                self._fd = os.fdopen(fd, "r+", 1)
+            if hasattr(fd, "fileno"):
+                fd = fd.fileno()
+            self._fd = os.fdopen(fd, "r+", 1)
 
     def reply(self, code, text):
         "Send back a reply to the client; handle multiline messages"
@@ -361,7 +360,7 @@ def _start_child(debug = False):
     try:
         s0.close()
         srv = Server(s1, debug)
-        #unshare.unshare(unshare.CLONE_NEWNET)
+        unshare.unshare(unshare.CLONE_NEWNET)
         srv.run()
     except BaseException, e:
         s = "Slave node aborting: %s\n" % str(e)
@@ -396,13 +395,12 @@ class Slave(object):
             if hasattr(fd, "readline"):
                 pass # fd ok
             else:
-                if hasattr(fd, "makefile"):
-                    fd = fd.makefile("r+", 1) # line buffered
-                else:
-                    fd = os.fdopen(fd, "r+", 1)
+                if hasattr(fd, "fileno"):
+                    fd = fd.fileno()
+                fd = os.fdopen(fd, "r+", 1)
         else:
             f, pid = _start_child(debug)
-            fd = f.makefile("r+", 1) # line buffered
+            fd = os.fdopen(f.fileno(), "r+", 1)
 
         self._pid = pid
         self._fd = fd
