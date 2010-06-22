@@ -1,7 +1,17 @@
-SRC = src/
-TEST = t/
-BUILDDIR = build/lib/
-DISTDIR = dist/
+SRC = src
+TEST = t
+BUILDDIR = build
+DISTDIR = dist
+
+# stupid distutils, it's broken in so many ways
+SUBBUILDDIR = $(shell python -c 'import distutils.util, sys; print "lib.%s-%s" % (distutils.util.get_platform(), sys.version[0:3])')
+PYTHON25 := $(shell python -c 'import sys; v = sys.version_info; print (1 if v[0] <= 2 and v[1] <= 5 else 0)')
+
+ifeq ($(PYTHON25),0)
+BUILDDIR := $(BUILDDIR)/$(SUBBUILDDIR)
+else
+BUILDDIR := $(BUILDDIR)/lib
+endif
 
 COVERAGE = $(or $(shell which coverage), $(shell which python-coverage), \
 	   coverage)
