@@ -352,55 +352,12 @@ class Server(object):
 
 # ============================================================================
 #
-# Client-side protocol implementation, and slave process creation
+# Client-side protocol implementation.
 #
-# Handle the creation of the child; parent gets (fd, pid), child never returns
-def _start_child(debug = False):
-    # Create socket pair to communicate
-    (s0, s1) = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM, 0)
-    # Spawn a child that will run in a loop
-    pid = os.fork()
-    if pid:
-        s1.close()
-        return (s0, pid)
-
-    try:
-        s0.close()
-        srv = Server(s1, debug)
-        unshare.unshare(unshare.CLONE_NEWNET)
-        srv.run()
-    except BaseException, e:
-        s = "Slave node aborting: %s\n" % str(e)
-        sep = "=" * 70 + "\n"
-        sys.stderr.write(s + sep)
-        traceback.print_exc(file=sys.stdout)
-        sys.stderr.write(sep)
-        try:
-            # try to pass the error to parent, if possible
-            s1.send("500 " + s)
-        except:
-            pass
-        os._exit(1)
-
-    os._exit(0)
-    # NOTREACHED
-
-class Slave(object):
-    """Class to create and manage slave processes; it is at the same time a
-    client implementation for the communication protocol."""
-    def __init__(self, debug = False, fd = None, pid = None):
-        """When called without arguments, it will fork, create a new network
-        namespace and enter a loop to serve requests from the master. The
-        parent process will return an object which is used to control the slave
-        thru RPC-like calls.
-
-        If fd and pid are specified, the slave process is not created; fd is
-        used as a control socket and pid is assumed to be the pid of the slave
-        process."""
-        # If fd is passed do not fork or anything
-        if not (fd and pid):
-            fd, pid = _start_child(debug)
-
+class Client(object):
+    """Client-side implementation of the communication protocol. Acts as a RPC
+    service."""
+    def __init__(self, fd, debug = False):
         # XXX: In some cases we do not call dup(); maybe this should be
         # consistent?
         if not hasattr(fd, "readline"):
@@ -412,7 +369,6 @@ class Slave(object):
                 nfd = os.dup(fd)
             fd = os.fdopen(nfd, "r+", 1)
 
-        self._pid = pid
         self._fd = fd
         # Wait for slave to send banner
         self._read_and_check_reply()
