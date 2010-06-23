@@ -5,6 +5,10 @@ import os, socket, sys, traceback, unshare
 import netns.protocol
 
 class Node(object):
+    _nodes = []
+    @classmethod
+    def get_nodes(cls):
+        return set(cls._nodes)
     def __init__(self, debug = False):
         """Create a new node in the emulation. Implemented as a separate
         process in a new network name space. Requires root privileges to run.
@@ -15,7 +19,7 @@ class Node(object):
         fd, pid = _start_child(debug)
         self._pid = pid
         self._slave = netns.protocol.Client(fd, debug)
-        self._valid = True
+        Node._nodes.append(self)
     @property
     def pid(self):
         return self._pid
