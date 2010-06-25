@@ -6,22 +6,35 @@ from netns.node import Node
 
 class __Config(object):
     def __init__(self):
-        self._run_as = 65535
+        self._run_as = 65534
         try:
-            self._run_as = pwd.getpwnam('nobody')[2]
+            pwd.getpwnam('nobody')
+            self._run_as = 'nobody'
         except:
             pass
 
-    def _set_run_as(self, uid):
-        if type(uid) != int:
-            uid = pwd.getpwnam(uid)[2]
+    def _set_run_as(self, user):
+        if str(user).isdigit():
+            uid = int(user)
+            try:
+                _user = pwd.getpwuid(uid)[0]
+            except:
+                raise AttributeError("UID %d does not exist" % int(user))
+            run_as = int(user)
+        else:
+            try:
+                uid = pwd.getpwnam(str(user))[2]
+            except:
+                raise AttributeError("User %s does not exist" % str(user))
+            run_as = str(user)
         if uid == 0:
             raise AttributeError("Cannot run as root by default")
-        self._run_as = uid
+        self._run_as = run_as
+        return run_as
     def _get_run_as(self):
         return self._run_as
     run_as = property(_get_run_as, _set_run_as, None,
-            "Default uid to run applications as")
+            "Default user to run applications as")
 
 config = __Config()
 get_nodes = Node.get_nodes

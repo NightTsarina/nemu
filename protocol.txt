@@ -34,9 +34,9 @@ PROC	KILL	<pid> <signal>	200/500			kill(pid, signal)
 (1) valid arguments: mtu <n>, state <up|down>, name <name>, lladdr <addr>
 
 (2) After PROC CRTE, only secondary PROC cmds are accepted until finished.
-Arguments are: uid gid argv[0] argv[1] ...
-The argv parameters are parsed as base64-encoded strings if they start with a
-'=' character.
+Arguments are: user argv[0] argv[1] ...
+The parameters are parsed as base64-encoded strings if they start with a '='
+character.
 
 (3) Secondary PROC commands, only valid after PROC CRTE. All parameters parsed
 as base64-encoded strings. Arguments for PROC ENV are pairs of key-value to
@@ -66,7 +66,7 @@ protocol exchanges occur through the socket.
 <S> 200 Ok.
 <C> ADDR DEL 10 192.168.1.1 24
 <S> 500 Address does not exist.
-<C> PROC CRTE 100 100 /bin/sh sh -c sleep 10
+<C> PROC CRTE root /bin/sh sh -c sleep 10
 <S> 200 Entering PROC mode.
 <C> PROC CWD /
 <S> 200 CWD set to /.

@@ -39,7 +39,7 @@ _proto_commands = {
             "DEL":  ("sisi", "")
             },
         "PROC": {
-            "CRTE": ("iib", "b*"),
+            "CRTE": ("bb", "b*"),
             "POLL": ("i", ""),
             "WAIT": ("i", ""),
             "KILL": ("i", "i")
@@ -246,8 +246,8 @@ class Server(object):
         self.reply(221, "Sayounara.");
         self.closed = True
 
-    def do_PROC_CRTE(self, cmdname, uid, gid, file, *argv):
-        self._proc = { 'uid': uid, 'gid': gid, 'file': file, 'argv': argv }
+    def do_PROC_CRTE(self, cmdname, user, file, *argv):
+        self._proc = { 'user': user, 'file': file, 'argv': argv }
         self.commands = _proc_commands
         self.reply(200, "Entering PROC mode.")
 
@@ -416,13 +416,14 @@ class Client(object):
         passfd.sendfd(self._fd, fd, "PROC " + type)
         self._read_and_check_reply()
 
-    def popen(self, uid, gid, file, argv = None, cwd = None, env = None,
+    def popen(self, user, file, argv = None, cwd = None, env = None,
             stdin = None, stdout = None, stderr = None):
         """Start a subprocess in the slave; the interface resembles
         subprocess.Popen, but with less functionality. In particular
         stdin/stdout/stderr can only be None or a open file descriptor."""
 
-        params = ["PROC", "CRTE", uid, gid, base64.b64encode(file)]
+        params = ["PROC", "CRTE", base64.b64encode(user),
+                base64.b64encode(file)]
         if argv != None:
             for i in argv:
                 params.append(base64.b64encode(i))
