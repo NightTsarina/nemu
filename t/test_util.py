@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 # vim:ts=4:sw=4:et:ai:sts=4
 
-import re
-import subprocess
+import re, subprocess, sys
 
 def process_ipcmd(str):
     cur = None
@@ -63,4 +62,14 @@ def get_devs_netns(node):
     (outdata, errdata) = node.run_process(["ip", "addr", "list"])
     return process_ipcmd(outdata)
 
-
+# Unittest from Python 2.6 doesn't have these decorators
+def skip(text):
+    def banner(f):
+        sys.stderr.write("*** WARNING: Skipping test %s (%s): `%s'\n" %
+                (f.__name__, f.__module__, text))
+        return None
+    return banner
+def skipUnless(cond, text):
+    return skip(text) if not cond else lambda f: f
+def skipIf(cond, text):
+    return skip(text) if cond else lambda f: f
