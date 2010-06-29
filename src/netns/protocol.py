@@ -295,7 +295,7 @@ class Server(object):
 
     def do_PROC_RUN(self, cmdname):
         try:
-            chld = netns.subprocess.Subprocess(**self._proc)
+            chld = netns.subprocess.Popen(**self._proc)
         except BaseException, e: # FIXME
             self.reply(500, "Failure starting process: %s" % str(e))
             self._proc = None
