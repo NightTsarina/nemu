@@ -39,7 +39,7 @@ _proto_commands = {
             "DEL":  ("sisi", "")
             },
         "PROC": {
-            "CRTE": ("bb", "b*"),
+            "CRTE": ("b", "b*"),
             "POLL": ("i", ""),
             "WAIT": ("i", ""),
             "KILL": ("i", "i")
@@ -50,6 +50,7 @@ _proc_commands = {
         "HELP": { None: ("", "") },
         "QUIT": { None: ("", "") },
         "PROC": {
+            "USER": ("b", ""),
             "CWD":  ("b", ""),
             "ENV":  ("bb", "b*"),
             "SIN":  ("", ""),
@@ -246,14 +247,18 @@ class Server(object):
         self.reply(221, "Sayounara.");
         self.closed = True
 
-    def do_PROC_CRTE(self, cmdname, user, executable, *argv):
-        self._proc = { 'user': user, 'executable': executable, 'argv': argv }
+    def do_PROC_CRTE(self, cmdname, executable, *argv):
+        self._proc = { 'executable': executable, 'argv': argv }
         self.commands = _proc_commands
         self.reply(200, "Entering PROC mode.")
 
+    def do_PROC_USER(self, cmdname, user):
+        self._proc['user'] = user
+        self.reply(200, "Program will run as `%s'." % user)
+
     def do_PROC_CWD(self, cmdname, dir):
         self._proc['cwd'] = dir
-        self.reply(200, "CWD set to %s." % dir)
+        self.reply(200, "CWD set to `%s'." % dir)
 
     def do_PROC_ENV(self, cmdname, *env):
         if len(env) % 2:
@@ -268,7 +273,7 @@ class Server(object):
 
     def do_PROC_SIN(self, cmdname):
         self.reply(354,
-                "Pass the file descriptor now, with '%s\\n' as payload." %
+                "Pass the file descriptor now, with `%s\\n' as payload." %
                 cmdname)
 
         if cmdname == 'PROC SIN':
@@ -416,21 +421,24 @@ class Client(object):
         passfd.sendfd(self._fd, fd, "PROC " + type)
         self._read_and_check_reply()
 
-    def spawn(self, user, executable, argv = None, cwd = None, env = None,
-            stdin = None, stdout = None, stderr = None):
+    def spawn(self, executable, argv = None, cwd = None, env = None,
+            stdin = None, stdout = None, stderr = None, user = None):
         """Start a subprocess in the slave; the interface resembles
         subprocess.Popen, but with less functionality. In particular
         stdin/stdout/stderr can only be None or a open file descriptor.
         See netns.subprocess.spawn for details."""
 
-        params = ["PROC", "CRTE", base64.b64encode(user),
-                base64.b64encode(executable)]
+        params = ["PROC", "CRTE", base64.b64encode(executable)]
         if argv != None:
             for i in argv:
                 params.append(base64.b64encode(i))
 
         self._send_cmd(*params)
         self._read_and_check_reply()
+
+        if user != None:
+            self._send_cmd("PROC", "USER", base64.b64encode(user))
+            self._read_and_check_reply()
 
         if cwd != None:
             self._send_cmd("PROC", "CWD", base64.b64encode(cwd))

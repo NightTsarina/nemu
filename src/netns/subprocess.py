@@ -3,8 +3,8 @@
 
 import fcntl, grp, os, pickle, pwd, signal, sys, traceback
 
-def spawn(user, executable, argv, cwd = None, env = None,
-        stdin = None, stdout = None, stderr = None):
+def spawn(executable, argv = None, cwd = None, env = None,
+        stdin = None, stdout = None, stderr = None, user = None):
     """Forks and execs a program, with stdio redirection and user switching.
     The program is specified by `executable', if it does not contain any slash,
     the PATH environment variable is used to search for the file.

@@ -57,6 +57,7 @@ class TestServer(unittest.TestCase):
         check_error(self, "quit 1")
 
         # Not allowed in normal mode
+        check_error(self, "proc user")
         check_error(self, "proc sin")
         check_error(self, "proc sout")
         check_error(self, "proc serr")
@@ -74,19 +75,19 @@ class TestServer(unittest.TestCase):
         check_error(self, "proc poll 1 2") # too many args
         check_error(self, "proc poll a") # invalid type
 
-        check_ok(self, "proc crte 0 /bin/sh", srv.do_PROC_CRTE,
-                [0, 0, '/bin/sh'])
+        check_ok(self, "proc crte /bin/sh", srv.do_PROC_CRTE,
+                ['/bin/sh'])
         # Commands that would fail, but the parsing is correct
         check_ok(self, "proc poll 0", None, [0])
         check_ok(self, "proc wait 0", None, [0])
         check_ok(self, "proc kill 0", None, [0])
 
-        check_error(self, "proc crte 0 =") # empty b64
-        check_error(self, "proc crte 0 =a") # invalid b64
+        check_error(self, "proc crte =") # empty b64
+        check_error(self, "proc crte =a") # invalid b64
 
         # simulate proc mode
         srv.commands = netns.protocol._proc_commands
-        check_error(self, "proc crte 0 foo")
+        check_error(self, "proc crte foo")
         check_error(self, "proc poll 0")
         check_error(self, "proc wait 0")
         check_error(self, "proc kill 0")

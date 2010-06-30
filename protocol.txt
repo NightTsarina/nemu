@@ -19,7 +19,8 @@ ADDR	DEL	if# addr_spec	200/500			ip addr del
 ROUT	LIST			200 serialised data	ip route list
 ROUT	ADD	route_spec	200/500			ip route add
 ROUT	DEL	route_spec	200/500			ip route del
-PROC	CRTE	proc_params	200/500			(2)
+PROC	CRTE	argv0 argv1...	200/500			(2)
+PROC	USER	username	200/500			(3)
 PROC	CWD	cwd		200/500			(3)
 PROC	ENV	k v k v...	200/500			(3)
 PROC	SIN			354+200/500		(4)
@@ -34,7 +35,6 @@ PROC	KILL	<pid> <signal>	200/500			kill(pid, signal)
 (1) valid arguments: mtu <n>, state <up|down>, name <name>, lladdr <addr>
 
 (2) After PROC CRTE, only secondary PROC cmds are accepted until finished.
-Arguments are: user argv[0] argv[1] ...
 The parameters are parsed as base64-encoded strings if they start with a '='
 character.
 
@@ -66,8 +66,10 @@ protocol exchanges occur through the socket.
 <S> 200 Ok.
 <C> ADDR DEL 10 192.168.1.1 24
 <S> 500 Address does not exist.
-<C> PROC CRTE root /bin/sh sh -c sleep 10
+<C> PROC CRTE /bin/sh sh -c sleep 10
 <S> 200 Entering PROC mode.
+<C> PROC USER nobody
+<S> 200 Program will run as `nobody'.
 <C> PROC CWD /
 <S> 200 CWD set to /.
 <C> PROC SIN
