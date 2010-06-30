@@ -56,32 +56,32 @@ class TestSubprocess(unittest.TestCase):
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_popen_chuser(self):
         user = 'nobody'
-        p = netns.subprocess.Popen(user, '/bin/sleep', ['/bin/sleep', '1000'])
-        self._check_ownership(user, p.pid)
-        p.kill()
-        self.assertEquals(p.wait(), signal.SIGTERM)
+        pid = netns.subprocess.spawn(user, '/bin/sleep', ['/bin/sleep', '100'])
+        self._check_ownership(user, pid)
+        os.kill(pid, signal.SIGTERM)
+        self.assertEquals(netns.subprocess.wait(pid), signal.SIGTERM)
 
     def test_popen_basic(self):
         # User does not exist
-        self.assertRaises(ValueError, netns.subprocess.Popen,
+        self.assertRaises(ValueError, netns.subprocess.spawn,
                 self.nouser, '/bin/sleep', ['/bin/sleep', '1000'])
-        self.assertRaises(ValueError, netns.subprocess.Popen,
+        self.assertRaises(ValueError, netns.subprocess.spawn,
                 self.nouid, '/bin/sleep', ['/bin/sleep', '1000'])
         # Invalid CWD: it is a file
-        self.assertRaises(OSError, netns.subprocess.Popen,
+        self.assertRaises(OSError, netns.subprocess.spawn,
                 None, '/bin/sleep', None, cwd = '/bin/sleep')
         # Invalid CWD: does not exist
-        self.assertRaises(OSError, netns.subprocess.Popen,
+        self.assertRaises(OSError, netns.subprocess.spawn,
                 None, '/bin/sleep', None, cwd = self.nofile)
         # Exec failure
-        self.assertRaises(OSError, netns.subprocess.Popen,
+        self.assertRaises(OSError, netns.subprocess.spawn,
                 None, self.nofile, None)
         # Test that the environment is cleared: sleep should not be found
         # XXX: This should be a python bug: if I don't set PATH explicitly, it
         # uses a default search path
-        self.assertRaises(OSError, netns.subprocess.Popen,
+        self.assertRaises(OSError, netns.subprocess.spawn,
                 None, 'sleep', None, env = {'PATH': ''})
-        #p = netns.subprocess.Popen(None, '/bin/sleep', ['/bin/sleep', '1000'],
+        #p = netns.subprocess.spawn(None, '/bin/sleep', ['/bin/sleep', '1000'],
         #        cwd = '/', env = [])
         # FIXME: tests fds
 

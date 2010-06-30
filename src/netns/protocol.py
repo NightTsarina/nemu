@@ -71,8 +71,8 @@ class Server(object):
         self.closed = False
         # Print debug info
         self.debug = debug
-        # Dictionary to keep track of started processes
-        self._children = dict()
+        # Set to keep track of started processes
+        self._children = set()
         # Buffer and flag for PROC mode
         self._proc = None
 
@@ -246,8 +246,8 @@ class Server(object):
         self.reply(221, "Sayounara.");
         self.closed = True
 
-    def do_PROC_CRTE(self, cmdname, user, file, *argv):
-        self._proc = { 'user': user, 'file': file, 'argv': argv }
+    def do_PROC_CRTE(self, cmdname, user, executable, *argv):
+        self._proc = { 'user': user, 'executable': executable, 'argv': argv }
         self.commands = _proc_commands
         self.reply(200, "Entering PROC mode.")
 
@@ -295,7 +295,7 @@ class Server(object):
 
     def do_PROC_RUN(self, cmdname):
         try:
-            chld = netns.subprocess.Popen(**self._proc)
+            chld = netns.subprocess.spawn(**self._proc)
         except BaseException, e: # FIXME
             self.reply(500, "Failure starting process: %s" % str(e))
             self._proc = None
@@ -317,12 +317,12 @@ class Server(object):
             self.reply(500, "Process does not exist.")
             return
         if cmdname == 'PROC POLL':
-            ret = self._children[pid].poll()
+            ret = netns.subprocess.poll(pid)
         else:
-            ret = self._children[pid].wait()
+            ret = netns.subprocess.wait(pid)
 
         if ret != None:
-            del self._children[pid]
+            self._children.remove(pid)
             self.reply(200, "%d exitcode." % ret)
         else:
             self.reply(450, "Not finished yet.")
@@ -330,14 +330,14 @@ class Server(object):
     # Same code for the two commands
     do_PROC_WAIT = do_PROC_POLL
 
-    def do_PROC_KILL(self, cmdname, pid, signal):
+    def do_PROC_KILL(self, cmdname, pid, sig):
         if pid not in self._children:
             self.reply(500, "Process does not exist.")
             return
         if signal:
-            self._children[pid].kill(signal)
+            os.kill(pid, sig)
         else:
-            self._children[pid].kill()
+            os.kill(pid, signal.SIGTERM)
         self.reply(200, "Process signalled.")
 
 #    def do_IF_LIST(self, cmdname, ifnr = None):
@@ -416,14 +416,15 @@ class Client(object):
         passfd.sendfd(self._fd, fd, "PROC " + type)
         self._read_and_check_reply()
 
-    def popen(self, user, file, argv = None, cwd = None, env = None,
+    def spawn(self, user, executable, argv = None, cwd = None, env = None,
             stdin = None, stdout = None, stderr = None):
         """Start a subprocess in the slave; the interface resembles
         subprocess.Popen, but with less functionality. In particular
-        stdin/stdout/stderr can only be None or a open file descriptor."""
+        stdin/stdout/stderr can only be None or a open file descriptor.
+        See netns.subprocess.spawn for details."""
 
         params = ["PROC", "CRTE", base64.b64encode(user),
-                base64.b64encode(file)]
+                base64.b64encode(executable)]
         if argv != None:
             for i in argv:
                 params.append(base64.b64encode(i))

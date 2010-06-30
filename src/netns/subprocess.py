@@ -3,125 +3,145 @@
 
 import fcntl, grp, os, pickle, pwd, signal, sys, traceback
 
-class Popen(object):
-    """Class that attempts to provide low-leven popen-like behaviour, with the
-    extra feature of being able to switch user before executing the command."""
-    def __init__(self, user, file, argv, cwd = None, env = None,
-            stdin = None, stdout = None, stderr = None):
-        """Check Python's subprocess.Popen for the intended behaviour. The
-        extra `user` argument, if not None, specifies a username to run the
-        command as, including its primary and secondary groups. If a numerical
-        UID is given, a reverse lookup is performed to find the user name and
-        then set correctly the groups.  Note that `stdin`, `stdout`, and
-        `stderr` can only be integers representing file descriptors, and that
-        they are not closed by this class; piping should be handled
-        externally."""
+def spawn(user, executable, argv, cwd = None, env = None,
+        stdin = None, stdout = None, stderr = None):
+    """Forks and execs a program, with stdio redirection and user switching.
+    The program is specified by `executable', if it does not contain any slash,
+    the PATH environment variable is used to search for the file.
 
-        userfd = [stdin, stdout, stderr]
-        sysfd = [x.fileno() for x in sys.stdin, sys.stdout, sys.stderr]
-        # Verify there is no clash
-        assert not (set(filter(None, userfd)) & set(filter(None, sysfd)))
+    The `user` parameter, if not None, specifies a user name to run the
+    command as, after setting its primary and secondary groups. If a numerical
+    UID is given, a reverse lookup is performed to find the user name and
+    then set correctly the groups.
 
-        if user != None:
-            if str(user).isdigit():
-                uid = int(user)
-                try:
-                    user = pwd.getpwuid(uid)[0]
-                except:
-                    raise ValueError("UID %d does not exist" % int(user))
-            else:
-                try:
-                    uid = pwd.getpwnam(str(user))[2]
-                except:
-                    raise ValueError("User %s does not exist" % str(user))
+    To run the program in a different directory than the current one, it should
+    be set in `cwd'.
 
-            gid = pwd.getpwuid(uid)[3]
-            groups = [x[2] for x in grp.getgrall() if user in x[3]]
+    If specified, `env' replaces the caller's environment with the dictionary
+    provided.
 
-        (r, w) = os.pipe()
-        pid = os.fork()
-        if pid == 0:
+    The standard input, output, and error of the created process will be
+    redirected to the file descriptors specified by `stdin`, `stdout`, and
+    `stderr`, respectively. These parameters must be integers or None, in which
+    case, no redirection will occur. If the value is negative, the respective
+    file descriptor is closed in the executed program.
+
+    Note that the original descriptors are not closed, and that piping should
+    be handled externally.
+    
+    Exceptions occurred while trying to set up the environment or executing the
+    program are propagated to the parent."""
+
+    userfd = [stdin, stdout, stderr]
+    filtered_userfd = filter(lambda x: x != None and x >= 0, userfd)
+    sysfd = [x.fileno() for x in sys.stdin, sys.stdout, sys.stderr]
+    # Verify there is no clash
+    assert not (set(sysfd) & set(filtered_userfd))
+
+    if user != None:
+        if str(user).isdigit():
+            uid = int(user)
             try:
-                # Set up stdio piping
-                for i in range(3):
-                    if userfd[i] != None:
-                        os.dup2(userfd[i], sysfd[i])
-                        os.close(userfd[i])
-                # Set up special control pipe
-                os.close(r)
-                fcntl.fcntl(w, fcntl.F_SETFD, fcntl.FD_CLOEXEC)
-                if user != None:
-                    # Change user
-                    os.setgid(gid)
-                    os.setgroups(groups)
-                    os.setuid(uid)
-                if cwd != None:
-                    os.chdir(cwd)
-                if not argv:
-                    argv = [ file ]
-                if '/' in file: # Should not search in PATH
-                    if env != None:
-                        os.execve(file, argv, env)
-                    else:
-                        os.execv(file, argv)
-                else: # use PATH
-                    if env != None:
-                        os.execvpe(file, argv, env)
-                    else:
-                        os.execvp(file, argv)
-                raise RuntimeError("Unreachable reached!")
+                user = pwd.getpwuid(uid)[0]
             except:
-                try:
-                    (t, v, tb) = sys.exc_info()
-                    # Got the child_traceback attribute trick from Python's
-                    # subprocess.py
-                    v.child_traceback = "".join(
-                            traceback.format_exception(t, v, tb))
-                    os.write(w, pickle.dumps(v))
-                    os.close(w)
-                except:
-                    traceback.print_exc()
-                os._exit(1)
+                raise ValueError("UID %d does not exist" % int(user))
+        else:
+            try:
+                uid = pwd.getpwnam(str(user))[2]
+            except:
+                raise ValueError("User %s does not exist" % str(user))
 
-        os.close(w)
+        gid = pwd.getpwuid(uid)[3]
+        groups = [x[2] for x in grp.getgrall() if user in x[3]]
 
-        # read EOF for success, or a string as error info
-        s = ""
-        while True:
-            s1 = os.read(r, 4096)
-            if s1 == "":
-                break
-            s += s1
-        os.close(r)
+    (r, w) = os.pipe()
+    pid = os.fork()
+    if pid == 0:
+        try:
+            # Set up stdio piping
+            for i in range(3):
+                if userfd[i] != None and userfd[i] >= 0:
+                    os.dup2(userfd[i], sysfd[i])
+                    os.close(userfd[i]) # only in child!
+                if userfd[i] != None and userfd[i] < 0:
+                    os.close(sysfd[i])
+            # Set up special control pipe
+            os.close(r)
+            fcntl.fcntl(w, fcntl.F_SETFD, fcntl.FD_CLOEXEC)
+            if user != None:
+                # Change user
+                os.setgid(gid)
+                os.setgroups(groups)
+                os.setuid(uid)
+            if cwd != None:
+                os.chdir(cwd)
+            if not argv:
+                argv = [ file ]
+            if '/' in file: # Should not search in PATH
+                if env != None:
+                    os.execve(file, argv, env)
+                else:
+                    os.execv(file, argv)
+            else: # use PATH
+                if env != None:
+                    os.execvpe(file, argv, env)
+                else:
+                    os.execvp(file, argv)
+            raise RuntimeError("Unreachable reached!")
+        except:
+            try:
+                (t, v, tb) = sys.exc_info()
+                # Got the child_traceback attribute trick from Python's
+                # subprocess.py
+                v.child_traceback = "".join(
+                        traceback.format_exception(t, v, tb))
+                os.write(w, pickle.dumps(v))
+                os.close(w)
+            except:
+                traceback.print_exc()
+            os._exit(1)
 
-        if s == "":
-            self._pid = pid
-            return
+    os.close(w)
 
-        # It was an error
-        os.waitpid(pid, 0)
-        raise pickle.loads(s)
+    # read EOF for success, or a string as error info
+    s = ""
+    while True:
+        s1 = os.read(r, 4096)
+        if s1 == "":
+            break
+        s += s1
+    os.close(r)
 
-    @property
-    def pid(self):
-        return self._pid
+    if s == "":
+        return pid
 
-    def poll(self):
-        """Check if the process already died. Returns the exit code or None if
-        the process is still alive."""
-        r = os.waitpid(self._pid, os.WNOHANG)
-        if r[0]:
-            del self._pid
-            return r[1]
-        return None
+    # It was an error
+    os.waitpid(pid, 0)
+    exc = pickle.loads(s)
+    # XXX: sys.excepthook
+    raise exc
 
-    def wait(self):
-        """Wait for process to die and return the exit code."""
-        r = os.waitpid(self._pid, 0)[1]
-        del self._pid
-        return r
+# Used to print extra info in nested exceptions
+def _custom_hook(t, v, tb):
+    sys.stderr.write("wee\n")
+    if hasattr(v, "child_traceback"):
+        sys.stderr.write("Nested exception, original traceback " +
+                "(most recent call last):\n")
+        sys.stderr.write(v.child_traceback + ("-" * 70) + "\n")
+    sys.__excepthook__(t, v, tb)
 
-    def kill(self, sig = signal.SIGTERM):
-        """Kill the process with the specified signal. Note that the process
-        still needs to be waited for to avoid zombies."""
-        os.kill(self._pid, sig)
+# XXX: somebody kill me, I deserve it :)
+sys.excepthook = _custom_hook
+
+def poll(pid):
+    """Check if the process already died. Returns the exit code or None if
+    the process is still alive."""
+    r = os.waitpid(pid, os.WNOHANG)
+    if r[0]:
+        return r[1]
+    return None
+
+def wait(pid):
+    """Wait for process to die and return the exit code."""
+    return os.waitpid(pid, 0)[1]
+
