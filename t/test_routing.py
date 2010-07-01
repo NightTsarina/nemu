@@ -1,10 +1,11 @@
 #!/usr/bin/env python
 # vim:ts=4:sw=4:et:ai:sts=4
 
-import netns
-import unittest
+import netns, test_util
+import os, unittest
 
 class TestRouting(unittest.TestCase):
+    @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_routing(self):
         node = netns.Node()
         if0 = node.add_if()

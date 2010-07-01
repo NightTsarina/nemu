@@ -26,7 +26,6 @@ class Node(object):
         Node._nextnode += 1
 
     def __del__(self):
-        print "__del__(%s)" % self
         self.shutdown()
 
     def shutdown(self):

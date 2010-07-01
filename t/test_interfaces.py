@@ -2,12 +2,12 @@
 # vim:ts=4:sw=4:et:ai:sts=4
 
 from test_util import get_devs, get_devs_netns
-import netns
+import netns, test_util
 import os
 import unittest
 
 class TestInterfaces(unittest.TestCase):
-    def test_util(self):
+    def test_utils(self):
         devs = get_devs()
         # There should be at least loopback!
         self.assertTrue(len(devs) > 0)
@@ -19,6 +19,7 @@ class TestInterfaces(unittest.TestCase):
             'bcast': None, 'family': 'inet'
             } in devs['lo']['addr'])
 
+    @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_interface_creation(self):
         node0 = netns.Node()
         ifaces = []
@@ -36,6 +37,7 @@ class TestInterfaces(unittest.TestCase):
 
         self.assertEquals(set(ifaces), node0.get_interfaces())
 
+    @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_interface_settings(self):
         node0 = netns.Node()
         if0 = node0.add_if(mac_address = '42:71:e0:90:ca:42', mtu = 1492)
@@ -67,6 +69,7 @@ class TestInterfaces(unittest.TestCase):
 
         # FIXME: get_stats
 
+    @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_interface_migration(self):
         node0 = netns.Node()
         dummyname = "dummy%d" % os.getpid()
@@ -84,6 +87,7 @@ class TestInterfaces(unittest.TestCase):
         self.assertEquals(devs[if0.name]['lladdr'], if0.mac_address)
         self.assertEquals(devs[if0.name]['mtu'], if0.mtu)
 
+    @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_interface_addresses(self):
         node0 = netns.Node()
         if0 = node0.add_if()

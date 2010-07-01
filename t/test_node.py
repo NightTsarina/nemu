@@ -1,17 +1,14 @@
 #!/usr/bin/env python
 # vim:ts=4:sw=4:et:ai:sts=4
 
-import netns
-import os
-import signal
-import subprocess
-import sys
-import time
+import netns, test_util
+import os, signal, subprocess, sys, time
 import unittest
 
 class TestNode(unittest.TestCase):
 #    def setUp(self):
 #        pass
+    @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_node(self):
         node = netns.Node()
         self.failIfEqual(node.pid, os.getpid())
@@ -20,20 +17,18 @@ class TestNode(unittest.TestCase):
         os.kill(node.pid, 0)
 
         nodes = netns.get_nodes()
-        self.assertEquals(nodes, set([node]))
+        self.assertEquals(nodes, [node])
         
         # Test that netns recognises a fork
         chld = os.fork()
         if chld == 0:
             if len(netns.get_nodes()) == 0:
-                sys.exit(0)
-            sys.exit(1)
+                os._exit(0)
+            os._exit(1)
         (pid, exitcode) = os.waitpid(chld, 0)
-        self.assertEquals(exitcode, 0)
+        self.assertEquals(exitcode, 0, "Node does not recognise forks")
 
-    def test_routing(self):
-        node = netns.Node()
-
+    @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_cleanup(self):
         def create_stuff():
             a = netns.Node()
@@ -53,7 +48,7 @@ class TestNode(unittest.TestCase):
         # Test automatic destruction
         orig_devs = len(get_devs())
         create_stuff()
-        self.assertEquals(netns.get_nodes(), set())
+        self.assertEquals(netns.get_nodes(), [])
         self.assertEquals(orig_devs, len(get_devs()))
 
         # Test at_exit hooks
