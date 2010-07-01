@@ -308,8 +308,14 @@ class Server(object):
             return
 
         self._children[chld.pid] = chld
-        self._proc = None
         self.commands = _proto_commands
+
+        # I can close the fds now
+        for d in ('stdin', 'stdout', 'stderr'):
+            if d in self._proc:
+                os.close(self._proc[d])
+
+        self._proc = None
         self.reply(200, "%d running." % chld.pid)
 
     def do_PROC_ABRT(self, cmdname):
@@ -406,6 +412,7 @@ class Client(object):
         defaults to 2."""
         code, text = self._read_reply()
         if code / 100 != expected:
+            # FIXME: shuld try to save and re-create exceptions
             raise RuntimeError("Error from slave: %d %s" % (code, text))
         return text
 
@@ -428,26 +435,26 @@ class Client(object):
         stdin/stdout/stderr can only be None or a open file descriptor.
         See netns.subprocess.spawn for details."""
 
-        params = ["PROC", "CRTE", base64.b64encode(executable)]
+        params = ["PROC", "CRTE", _b64(executable)]
         if argv != None:
             for i in argv:
-                params.append(base64.b64encode(i))
+                params.append(_b64(i))
 
         self._send_cmd(*params)
         self._read_and_check_reply()
 
         if user != None:
-            self._send_cmd("PROC", "USER", base64.b64encode(user))
+            self._send_cmd("PROC", "USER", _b64(user))
             self._read_and_check_reply()
 
         if cwd != None:
-            self._send_cmd("PROC", "CWD", base64.b64encode(cwd))
+            self._send_cmd("PROC", "CWD", _b64(cwd))
             self._read_and_check_reply()
 
         if env != None:
             params = []
             for i in env:
-                params.append(base64.b64encode(i))
+                params.append(_b64(i))
             self._send_cmd("PROC", "ENV", params)
             self._read_and_check_reply()
 
@@ -484,7 +491,7 @@ class Client(object):
         exitcode = text.split()[0]
         return exitcode
 
-    def kill(self, pid, sig = signal.SIGTERM):
+    def signal(self, pid, sig = signal.SIGTERM):
         """Equivalent to Popen.send_signal(). Sends a signal to the child
         process; signal defaults to SIGTERM."""
         if sig:
@@ -493,4 +500,12 @@ class Client(object):
             self._send_cmd("PROC", "KILL", pid)
         text = self._read_and_check_reply()
 
+
+def _b64(text):
+    text = str(text)
+    if filter(lambda x: ord(x) > ord(" ") and ord(x) <= ord("z")
+            and x != "=", text):
+        return text
+    else:
+        return "=" + base64.b64encode(text)
 
