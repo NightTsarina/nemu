@@ -34,6 +34,27 @@ class TestServer(unittest.TestCase):
         pid, ret = os.waitpid(pid, 0)
         self.assertEquals(ret, 0)
 
+    def test_spawn_recovery(self):
+        (s0, s1) = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM, 0)
+        pid = os.fork()
+        if not pid:
+            s1.close()
+            srv = netns.protocol.Server(s0)
+            srv.run()
+            os._exit(0)
+        cli = netns.protocol.Client(s1)
+        s0.close()
+
+        # make PROC SIN fail
+        self.assertRaises(OSError, cli.spawn, "/bin/true", stdin = -1)
+        # check if the protocol is in a sane state:
+        # PROC CWD should not be valid
+        cli._send_cmd("PROC", "CWD", "/")
+        self.assertRaises(RuntimeError, cli._read_and_check_reply)
+        cli.shutdown()
+        pid, ret = os.waitpid(pid, 0)
+        self.assertEquals(ret, 0)
+
     def test_basic_stuff(self):
         (s0, s1) = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM, 0)
         srv = netns.protocol.Server(s0)

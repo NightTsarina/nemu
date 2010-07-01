@@ -418,14 +418,21 @@ class Client(object):
 
     def shutdown(self):
         "Tell the client to quit."
-        self._send_cmd(("QUIT", ))
+        self._send_cmd("QUIT")
         self._read_and_check_reply()
 
-    def _send_fd(self, type, fd):
+    def _send_fd(self, name, fd):
         "Pass a file descriptor"
-        self._send_cmd("PROC", type)
+        self._send_cmd("PROC", name)
         self._read_and_check_reply(3)
-        passfd.sendfd(self._fd, fd, "PROC " + type)
+        try:
+            passfd.sendfd(self._fd, fd, "PROC " + name)
+        except:
+            # need to fill the buffer on the other side, nevertheless
+            self._fd.write("=" * (len(name) + 5))
+            # And also read the expected error
+            self._read_and_check_reply(5)
+            raise
         self._read_and_check_reply()
 
     def spawn(self, executable, argv = None, cwd = None, env = None,
@@ -443,32 +450,38 @@ class Client(object):
         self._send_cmd(*params)
         self._read_and_check_reply()
 
-        if user != None:
-            self._send_cmd("PROC", "USER", _b64(user))
+        # After this, if we get an error, we have to abort the PROC
+        try:
+            if user != None:
+                self._send_cmd("PROC", "USER", _b64(user))
+                self._read_and_check_reply()
+
+            if cwd != None:
+                self._send_cmd("PROC", "CWD", _b64(cwd))
+                self._read_and_check_reply()
+
+            if env != None:
+                params = []
+                for i in env:
+                    params.append(_b64(i))
+                self._send_cmd("PROC", "ENV", params)
+                self._read_and_check_reply()
+
+            if stdin != None:
+                self._send_fd("SIN", stdin)
+            if stdout != None:
+                self._send_fd("SOUT", stdout)
+            if stderr != None:
+                self._send_fd("SERR", stderr)
+
+            self._send_cmd("PROC", "RUN")
+            pid = self._read_and_check_reply().split()[0]
+
+            return pid
+        except:
+            self._send_cmd("PROC", "ABRT")
             self._read_and_check_reply()
-
-        if cwd != None:
-            self._send_cmd("PROC", "CWD", _b64(cwd))
-            self._read_and_check_reply()
-
-        if env != None:
-            params = []
-            for i in env:
-                params.append(_b64(i))
-            self._send_cmd("PROC", "ENV", params)
-            self._read_and_check_reply()
-
-        if stdin != None:
-            self._send_fd("SIN", stdin)
-        if stdout != None:
-            self._send_fd("SOUT", stdout)
-        if stderr != None:
-            self._send_fd("SERR", stderr)
-
-        self._send_cmd("PROC", "RUN")
-        pid = self._read_and_check_reply().split()[0]
-
-        return pid
+            raise
 
     def poll(self, pid):
         """Equivalent to Popen.poll(), checks if the process has finished.
