@@ -1,14 +1,17 @@
 #!/usr/bin/env python
 # vim:ts=4:sw=4:et:ai:sts=4
 
-import os, socket, sys, traceback, unshare
+import os, socket, sys, traceback, unshare, weakref
 import netns.protocol
 
 class Node(object):
-    _nodes = []
+    _nodes = weakref.WeakValueDictionary()
+    _nextnode = 0
     @classmethod
     def get_nodes(cls):
-        return set(cls._nodes)
+        s = sorted(Node._nodes.items(), key = lambda x: x[0])
+        return [ x[1] for x in s ]
+
     def __init__(self, debug = False):
         """Create a new node in the emulation. Implemented as a separate
         process in a new network name space. Requires root privileges to run.
@@ -19,7 +22,18 @@ class Node(object):
         fd, pid = _start_child(debug)
         self._pid = pid
         self._slave = netns.protocol.Client(fd, debug)
-        Node._nodes.append(self)
+        Node._nodes[Node._nextnode] = self
+        Node._nextnode += 1
+
+    def __del__(self):
+        print "__del__(%s)" % self
+        self.shutdown()
+
+    def shutdown(self):
+        self._slave.shutdown()
+        del self._pid
+        del self._slave
+
     @property
     def pid(self):
         return self._pid
