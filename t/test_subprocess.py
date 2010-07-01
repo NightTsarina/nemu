@@ -54,36 +54,63 @@ class TestSubprocess(unittest.TestCase):
     # XXX: unittest still cannot skip tests
     #@unittest.skipUnless(os.getuid() == 0, "Test requires root privileges")
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
-    def test_popen_chuser(self):
+    def test_spawn_chuser(self):
         user = 'nobody'
-        pid = netns.subprocess.spawn(user, '/bin/sleep', ['/bin/sleep', '100'])
+        pid = netns.subprocess.spawn('/bin/sleep', ['/bin/sleep', '100'],
+                user = user)
         self._check_ownership(user, pid)
         os.kill(pid, signal.SIGTERM)
         self.assertEquals(netns.subprocess.wait(pid), signal.SIGTERM)
 
-    def test_popen_basic(self):
+    def test_spawn_basic(self):
         # User does not exist
         self.assertRaises(ValueError, netns.subprocess.spawn,
-                self.nouser, '/bin/sleep', ['/bin/sleep', '1000'])
+                '/bin/sleep', ['/bin/sleep', '1000'], user = self.nouser)
         self.assertRaises(ValueError, netns.subprocess.spawn,
-                self.nouid, '/bin/sleep', ['/bin/sleep', '1000'])
+                '/bin/sleep', ['/bin/sleep', '1000'], user = self.nouid)
         # Invalid CWD: it is a file
         self.assertRaises(OSError, netns.subprocess.spawn,
-                None, '/bin/sleep', None, cwd = '/bin/sleep')
+                '/bin/sleep', cwd = '/bin/sleep')
         # Invalid CWD: does not exist
         self.assertRaises(OSError, netns.subprocess.spawn,
-                None, '/bin/sleep', None, cwd = self.nofile)
+                '/bin/sleep', cwd = self.nofile)
         # Exec failure
-        self.assertRaises(OSError, netns.subprocess.spawn,
-                None, self.nofile, None)
+        self.assertRaises(OSError, netns.subprocess.spawn, self.nofile)
+
         # Test that the environment is cleared: sleep should not be found
         # XXX: This should be a python bug: if I don't set PATH explicitly, it
         # uses a default search path
         self.assertRaises(OSError, netns.subprocess.spawn,
-                None, 'sleep', None, env = {'PATH': ''})
+                'sleep', env = {'PATH': ''})
         #p = netns.subprocess.spawn(None, '/bin/sleep', ['/bin/sleep', '1000'],
         #        cwd = '/', env = [])
         # FIXME: tests fds
+
+    @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
+    def test_Subprocess_basic(self):
+        node = netns.Node()
+        # User does not exist
+        self.assertRaises(RuntimeError, netns.subprocess.Subprocess, node,
+                '/bin/sleep', ['/bin/sleep', '1000'], user = self.nouser)
+        self.assertRaises(RuntimeError, netns.subprocess.Subprocess, node,
+                '/bin/sleep', ['/bin/sleep', '1000'], user = self.nouid)
+        # Invalid CWD: it is a file
+        self.assertRaises(RuntimeError, netns.subprocess.Subprocess, node,
+                '/bin/sleep', cwd = '/bin/sleep')
+        # Invalid CWD: does not exist
+        self.assertRaises(RuntimeError, netns.subprocess.Subprocess, node,
+                '/bin/sleep', cwd = self.nofile)
+        # Exec failure
+        self.assertRaises(RuntimeError, netns.subprocess.Subprocess, node,
+                self.nofile)
+        # Test that the environment is cleared: sleep should not be found
+        # XXX: This should be a python bug: if I don't set PATH explicitly, it
+        # uses a default search path
+        self.assertRaises(RuntimeError, netns.subprocess.Subprocess, node,
+                'sleep', env = {'PATH': ''})
+        #p = netns.subprocess.Subprocess(None, '/bin/sleep', ['/bin/sleep', '1000'], cwd = '/', env = [])
+        # FIXME: tests fds
+
 
 if __name__ == '__main__':
     unittest.main()

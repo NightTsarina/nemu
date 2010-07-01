@@ -76,17 +76,17 @@ def spawn(executable, argv = None, cwd = None, env = None,
             if cwd != None:
                 os.chdir(cwd)
             if not argv:
-                argv = [ file ]
-            if '/' in file: # Should not search in PATH
+                argv = [ executable ]
+            if '/' in executable: # Should not search in PATH
                 if env != None:
-                    os.execve(file, argv, env)
+                    os.execve(executable, argv, env)
                 else:
-                    os.execv(file, argv)
+                    os.execv(executable, argv)
             else: # use PATH
                 if env != None:
-                    os.execvpe(file, argv, env)
+                    os.execvpe(executable, argv, env)
                 else:
-                    os.execvp(file, argv)
+                    os.execvp(executable, argv)
             raise RuntimeError("Unreachable reached!")
         except:
             try:
@@ -119,6 +119,7 @@ def spawn(executable, argv = None, cwd = None, env = None,
     os.waitpid(pid, 0)
     exc = pickle.loads(s)
     # XXX: sys.excepthook
+    #print exc.child_traceback
     raise exc
 
 # Used to print extra info in nested exceptions
@@ -145,3 +146,44 @@ def wait(pid):
     """Wait for process to die and return the exit code."""
     return os.waitpid(pid, 0)[1]
 
+class Subprocess(object):
+    # FIXME: this is the visible interface; documentation should move here.
+    """OO-style interface to spawn(), but invoked through the controlling
+    process."""
+    # FIXME
+    default_user = None
+    def __init__(self, node, executable, argv = None, cwd = None, env = None,
+            stdin = None, stdout = None, stderr = None, user = None):
+        self._slave = node._slave
+
+        if user == None:
+            user = Subprocess.default_user
+
+        # confusingly enough, to go to the function at the top of this file,
+        # I need to call it thru the communications protocol: remember that
+        # happens in another process!
+        self._pid = self._slave.spawn(executable, argv = argv, cwd = cwd,
+                env = env, stdin = stdin, stdout = stdout, stderr = stderr,
+                user = user)
+
+        node._add_subprocess(self)
+
+    @property
+    def pid(self):
+        return self._pid
+
+    def poll(self):
+        r = self._slave.poll(self._pid)
+        if r != None:
+            del self._pid
+            self.return_value = r
+        return r
+
+    def wait(self):
+        r = self._slave.wait(self._pid)
+        del self._pid
+        self.return_value = r
+        return r
+
+    def signal(self, sig = signal.SIGTERM):
+        return self._slave.signal(self._pid, sig)

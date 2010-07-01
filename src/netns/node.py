@@ -64,6 +64,7 @@ def _start_child(debug = False):
         s1.close()
         return (s0, pid)
 
+    # FIXME: clean up signal handers, atexit functions, etc.
     try:
         s0.close()
         srv = netns.protocol.Server(s1, debug)
