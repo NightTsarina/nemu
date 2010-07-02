@@ -488,7 +488,7 @@ class Client(object):
         self._send_cmd("PROC", "POLL", pid)
         code, text = self._read_reply()
         if code / 100 == 2:
-            exitcode = text.split()[0]
+            exitcode = int(text.split()[0])
             return exitcode
         if code / 100 == 4:
             return Null
@@ -500,7 +500,7 @@ class Client(object):
         returns the exitcode."""
         self._send_cmd("PROC", "WAIT", pid)
         text = self._read_and_check_reply()
-        exitcode = text.split()[0]
+        exitcode = int(text.split()[0])
         return exitcode
 
     def signal(self, pid, sig = signal.SIGTERM):
