@@ -39,6 +39,9 @@ class __Config(object):
 config = __Config()
 get_nodes = Node.get_nodes
 
+# FIXME: set atfork hooks
+# http://code.google.com/p/python-atfork/source/browse/atfork/__init__.py
+
 def set_cleanup_hooks(on_exit = False, on_signals = []):
     pass
 
