@@ -201,9 +201,9 @@ class Server(object):
                 try:
                     if args[i][0] == '=':
                         args[i] = base64.b64decode(args[i][1:])
-                    if len(args[i]) == 0:
-                        self.reply(500, "Invalid parameter: empty.")
-                        return None
+#                    if len(args[i]) == 0:
+#                        self.reply(500, "Invalid parameter: empty.")
+#                        return None
                 except TypeError:
                     self.reply(500, "Invalid parameter: not base-64 encoded.")
                     return None
@@ -463,7 +463,7 @@ class Client(object):
                 params = []
                 for k, v in env.items():
                     params.extend([_b64(k), _b64(v)])
-                self._send_cmd("PROC", "ENV", params)
+                self._send_cmd("PROC", "ENV", *params)
                 self._read_and_check_reply()
 
             if stdin != None:
@@ -478,7 +478,7 @@ class Client(object):
             raise
 
         self._send_cmd("PROC", "RUN")
-        pid = self._read_and_check_reply().split()[0]
+        pid = int(self._read_and_check_reply().split()[0])
 
         return pid
 

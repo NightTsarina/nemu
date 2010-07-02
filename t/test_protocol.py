@@ -103,7 +103,7 @@ class TestServer(unittest.TestCase):
         check_ok(self, "proc wait 0", None, [0])
         check_ok(self, "proc kill 0", None, [0])
 
-        check_error(self, "proc crte =") # empty b64
+        check_ok(self, "proc crte =", srv.do_PROC_CRTE, [""]) # empty b64
         check_error(self, "proc crte =a") # invalid b64
 
         # simulate proc mode
