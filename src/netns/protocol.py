@@ -315,7 +315,7 @@ class Server(object):
                 os.close(self._proc[d])
 
         self._proc = None
-        self.reply(200, "%d running." % chld.pid)
+        self.reply(200, "%d running." % chld)
 
     def do_PROC_ABRT(self, cmdname):
         self._proc = None
