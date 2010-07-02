@@ -22,6 +22,21 @@ def _getpwuid(uid):
     except:
         return None
 
+def _readall(fd):
+    s = ""
+    while True:
+        try:
+            s1 = os.read(fd, 4096)
+        except OSError, e:
+            if e.errno == errno.EINTR:
+                continue
+            else:
+                raise
+        if s1 == "":
+            break
+        s += s1
+    return s
+
 class TestSubprocess(unittest.TestCase):
     def _check_ownership(self, user, pid):
         uid = pwd.getpwnam(user)[2]
@@ -51,8 +66,6 @@ class TestSubprocess(unittest.TestCase):
         while _stat(self.nofile):
             self.nofile += '_'
 
-    # XXX: unittest still cannot skip tests
-    #@unittest.skipUnless(os.getuid() == 0, "Test requires root privileges")
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_spawn_chuser(self):
         user = 'nobody'
@@ -61,6 +74,16 @@ class TestSubprocess(unittest.TestCase):
         self._check_ownership(user, pid)
         os.kill(pid, signal.SIGTERM)
         self.assertEquals(netns.subprocess.wait(pid), signal.SIGTERM)
+
+    @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
+    def test_Subprocess_chuser(self):
+        node = netns.Node(nonetns = True)
+        user = 'nobody'
+        p = netns.subprocess.Subprocess(node, '/bin/sleep',
+                ['/bin/sleep', '1000'], user = user)
+        self._check_ownership(user, p.pid)
+        p.signal()
+        self.assertEquals(p.wait(), -signal.SIGTERM)
 
     def test_spawn_basic(self):
         # User does not exist
@@ -82,13 +105,16 @@ class TestSubprocess(unittest.TestCase):
         # uses a default search path
         self.assertRaises(OSError, netns.subprocess.spawn,
                 'sleep', env = {'PATH': ''})
-        #p = netns.subprocess.spawn(None, '/bin/sleep', ['/bin/sleep', '1000'],
-        #        cwd = '/', env = [])
-        # FIXME: tests fds
 
-    @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
+        r, w = os.pipe()
+        p = netns.subprocess.spawn('/bin/echo', ['echo', 'hello world'],
+                stdout = w)
+        os.close(w)
+        self.assertEquals(_readall(r), "hello world\n")
+        os.close(r)
+
     def test_Subprocess_basic(self):
-        node = netns.Node()
+        node = netns.Node(nonetns = True) #, debug = True)
         # User does not exist
         self.assertRaises(RuntimeError, netns.subprocess.Subprocess, node,
                 '/bin/sleep', ['/bin/sleep', '1000'], user = self.nouser)
@@ -108,10 +134,15 @@ class TestSubprocess(unittest.TestCase):
         # uses a default search path
         self.assertRaises(RuntimeError, netns.subprocess.Subprocess, node,
                 'sleep', env = {'PATH': ''})
-        #p = netns.subprocess.Subprocess(None, '/bin/sleep', ['/bin/sleep', '1000'], cwd = '/', env = [])
         # FIXME: tests fds
+        r, w = os.pipe()
+        p = netns.subprocess.Subprocess(node, '/bin/echo',
+                ['echo', 'hello world'], stdout = w)
+        os.close(w)
+        self.assertEquals(_readall(r), "hello world\n")
+        os.close(r)
 
-
+# FIXME: tests for Popen!
 if __name__ == '__main__':
     unittest.main()
 
