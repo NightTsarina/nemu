@@ -159,7 +159,7 @@ class Server(object):
             del args[0]
 
         if cmd2 and cmd2 not in subcommands:
-            self.reply(500, "Unknown sub-command for %s." % cmd1)
+            self.reply(500, "Unknown sub-command for %s: %s." % (cmd1, cmd2))
             return None
 
         (mandatory, optional) = subcommands[cmd2]
@@ -276,14 +276,9 @@ class Server(object):
                 "Pass the file descriptor now, with `%s\\n' as payload." %
                 cmdname)
 
-        if cmdname == 'PROC SIN':
-            mode = 'r'
-        else:
-            mode = 'w'
-
         try:
-            fd, payload = passfd.recvfd(self._fd, len(cmdname) + 1, mode)
-        except BaseException, e: # FIXME
+            fd, payload = passfd.recvfd(self._fd, len(cmdname) + 1)
+        except (IOError, BaseException), e: # FIXME
             self.reply(500, "Error receiving FD: %s" % str(e))
             return
 
@@ -301,13 +296,17 @@ class Server(object):
     def do_PROC_RUN(self, cmdname):
         try:
             chld = netns.subprocess.spawn(**self._proc)
-        except BaseException, e: # FIXME
-            self.reply(500, "Failure starting process: %s" % str(e))
+        except:
+            (t, v, tb) = sys.exc_info()
+            r = ["Failure starting process: %s" % str(v)]
+            if self.debug:
+                r += traceback.format_exception(t, v, tb)
+            self.reply(500, r)
             self._proc = None
             self.commands = _proto_commands
             return
 
-        self._children[chld.pid] = chld
+        self._children.add(chld)
         self.commands = _proto_commands
 
         # I can close the fds now
@@ -391,7 +390,7 @@ class Client(object):
     def _read_reply(self):
         """Reads a (possibly multi-line) response from the server. Returns a
         tuple containing (code, text)"""
-        text = ""
+        text = []
         while True:
             line = self._fd.readline().rstrip()
             if not line:
@@ -401,10 +400,10 @@ class Client(object):
             if not m:
                 raise RuntimeError("Protocol error, read: %s" % line)
             status = m.group(1)
-            text += m.group(3)
+            text.append(m.group(3))
             if m.group(2) == " ":
                 break
-        return (int(status), text)
+        return (int(status), "\n".join(text))
 
     def _read_and_check_reply(self, expected = 2):
         """Reads a response and raises an exception if the first digit of the
@@ -462,8 +461,8 @@ class Client(object):
 
             if env != None:
                 params = []
-                for i in env:
-                    params.append(_b64(i))
+                for k, v in env.items():
+                    params.extend([_b64(k), _b64(v)])
                 self._send_cmd("PROC", "ENV", params)
                 self._read_and_check_reply()
 
@@ -473,15 +472,15 @@ class Client(object):
                 self._send_fd("SOUT", stdout)
             if stderr != None:
                 self._send_fd("SERR", stderr)
-
-            self._send_cmd("PROC", "RUN")
-            pid = self._read_and_check_reply().split()[0]
-
-            return pid
         except:
             self._send_cmd("PROC", "ABRT")
             self._read_and_check_reply()
             raise
+
+        self._send_cmd("PROC", "RUN")
+        pid = self._read_and_check_reply().split()[0]
+
+        return pid
 
     def poll(self, pid):
         """Equivalent to Popen.poll(), checks if the process has finished.
