@@ -30,7 +30,7 @@ class Node(object):
         self.shutdown()
 
     def shutdown(self):
-        for p in self._processes:
+        for p in self._processes.values():
             p.destroy()
         del self._processes
         del self._pid
