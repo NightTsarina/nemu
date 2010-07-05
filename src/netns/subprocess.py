@@ -3,6 +3,162 @@
 
 import fcntl, grp, os, pickle, pwd, signal, select, sys, traceback
 
+__all__ = [ 'PIPE', 'STDOUT', 'Popen', 'Subprocess', 'spawn', 'wait', 'poll' ]
+
+# User-facing interfaces
+
+class Subprocess(object):
+    # FIXME: this is the visible interface; documentation should move here.
+    """OO-style interface to spawn(), but invoked through the controlling
+    process."""
+    # FIXME
+    default_user = None
+    def __init__(self, node, executable, argv = None, cwd = None, env = None,
+            stdin = None, stdout = None, stderr = None, user = None):
+        self._slave = node._slave
+
+        if user == None:
+            user = Subprocess.default_user
+
+        # confusingly enough, to go to the function at the top of this file,
+        # I need to call it thru the communications protocol: remember that
+        # happens in another process!
+        self._pid = self._slave.spawn(executable, argv = argv, cwd = cwd,
+                env = env, stdin = stdin, stdout = stdout, stderr = stderr,
+                user = user)
+
+        node._add_subprocess(self)
+        self._returncode = None
+
+    @property
+    def pid(self):
+        return self._pid
+
+    def poll(self):
+        r = self._slave.poll(self._pid)
+        if r != None:
+            del self._pid
+            self._returncode = r
+        return self.returncode
+
+    def wait(self):
+        self._returncode = self._slave.wait(self._pid)
+        del self._pid
+        return self.returncode
+
+    def signal(self, sig = signal.SIGTERM):
+        return self._slave.signal(self._pid, sig)
+
+    @property
+    def returncode(self):
+        if self._returncode == None:
+            return None
+        if os.WIFSIGNALED(self._returncode):
+            return -os.WTERMSIG(self._returncode)
+        if os.WIFEXITED(self._returncode):
+            return os.WEXITSTATUS(self._returncode)
+        raise RuntimeError("Invalid return code")
+
+    # FIXME: do we have any other way to deal with this than having explicit
+    # destroy?
+    def destroy(self):
+        pass
+
+PIPE = -1
+STDOUT = -2
+class Popen(Subprocess):
+    def __init__(self, node, executable, argv = None, cwd = None, env = None,
+            stdin = None, stdout = None, stderr = None, user = None,
+            bufsize = 0):
+        self.stdin = self.stdout = self.stderr = None
+        fdmap = { "stdin": stdin, "stdout": stdout, "stderr": stderr }
+        # if PIPE: all should be closed at the end
+        for k, v in fdmap.items():
+            if v == None:
+                continue
+            if v == PIPE:
+                r, w = os.pipe()
+                if k == "stdin":
+                    self.stdin = os.fdopen(w, 'wb', bufsize)
+                    fdmap[k] = r
+                else:
+                    setattr(self, k, os.fdopen(r, 'rb', bufsize))
+                    fdmap[k] = w
+            elif isinstance(v, int):
+                pass
+            else:
+                fdmap[k] = v.fileno()
+        if stderr == STDOUT:
+            fdmap['stderr'] = fdmap['stdout']
+
+        super(Popen, self).__init__(node, executable, argv = argv, cwd = cwd,
+                env = env, stdin = fdmap['stdin'], stdout = fdmap['stdout'],
+                stderr = fdmap['stderr'], user = user)
+
+        # Close pipes, they have been dup()ed to the child
+        for k, v in fdmap.items():
+            if getattr(self, k) != None:
+                _eintr_wrapper(os.close, v)
+
+        #self.universal_newlines = False # compat with subprocess.communicate
+
+    # No need to reinvent the wheel: damnit, stupid python namespace handling
+    # won't allow me to reference another module called subprocess...
+    #communicate = subprocess.communicate
+    #_communicate = subprocess._communicate
+    def communicate(self, input = None):
+        # FIXME: almost verbatim from stdlib version, need to be removed or
+        # something
+        wset = []
+        rset = []
+        err = None
+        out = None
+        if self.stdin != None:
+            self.stdin.flush()
+            if input:
+                wset.append(self.stdin)
+            else:
+                self.stdin.close()
+        if self.stdout != None:
+            rset.append(self.stdout)
+            out = []
+        if self.stderr != None:
+            rset.append(self.stderr)
+            err = []
+
+        offset = 0
+        while rset or wset:
+            r, w, x = select.select(rset, wset, [])
+            if self.stdin in w:
+                offset += os.write(self.stdin.fileno(),
+                        #buffer(input, offset, select.PIPE_BUF))
+                        buffer(input, offset, 512)) # XXX: py2.7
+                if offset >= len(input):
+                    self.stdin.close()
+                    wset = []
+            for i in self.stdout, self.stderr:
+                if i in r:
+                    d = os.read(i.fileno(), 1024) # No need for eintr wrapper
+                    if d == "":
+                        i.close
+                        rset.remove(i)
+                    else:
+                        if i == self.stdout:
+                            out.append(d)
+                        else:
+                            err.append(d)
+
+        if out != None:
+            out = ''.join(out)
+        if err != None:
+            err = ''.join(err)
+        self.wait()
+        return (out, err)
+
+# =======================================================================
+#
+# Server-side code, called from netns.protocol.Server
+
 def spawn(executable, argv = None, cwd = None, env = None, stdin = None,
         stdout = None, stderr = None, close_fds = False, user = None):
     """Forks and execs a program, with stdio redirection and user switching.
@@ -156,154 +312,6 @@ def wait(pid):
     return _eintr_wrapper(os.waitpid, pid, 0)[1]
 
 
-# User-facing interfaces
-
-class Subprocess(object):
-    # FIXME: this is the visible interface; documentation should move here.
-    """OO-style interface to spawn(), but invoked through the controlling
-    process."""
-    # FIXME
-    default_user = None
-    def __init__(self, node, executable, argv = None, cwd = None, env = None,
-            stdin = None, stdout = None, stderr = None, user = None):
-        self._slave = node._slave
-
-        if user == None:
-            user = Subprocess.default_user
-
-        # confusingly enough, to go to the function at the top of this file,
-        # I need to call it thru the communications protocol: remember that
-        # happens in another process!
-        self._pid = self._slave.spawn(executable, argv = argv, cwd = cwd,
-                env = env, stdin = stdin, stdout = stdout, stderr = stderr,
-                user = user)
-
-        node._add_subprocess(self)
-        self._returncode = None
-
-    @property
-    def pid(self):
-        return self._pid
-
-    def poll(self):
-        r = self._slave.poll(self._pid)
-        if r != None:
-            del self._pid
-            self._returncode = r
-        return self.returncode
-
-    def wait(self):
-        self._returncode = self._slave.wait(self._pid)
-        del self._pid
-        return self.returncode
-
-    def signal(self, sig = signal.SIGTERM):
-        return self._slave.signal(self._pid, sig)
-
-    @property
-    def returncode(self):
-        if self._returncode == None:
-            return None
-        if os.WIFSIGNALED(self._returncode):
-            return -os.WTERMSIG(self._returncode)
-        if os.WIFEXITED(self._returncode):
-            return os.WEXITSTATUS(self._returncode)
-        raise RuntimeError("Invalid return code")
-
-    # FIXME: do we have any other way to deal with this than having explicit
-    # destroy?
-    def destroy(self):
-        pass
-
-PIPE = -1
-STDOUT = -2
-class Popen(Subprocess):
-    def __init__(self, node, executable, argv = None, cwd = None, env = None,
-            stdin = None, stdout = None, stderr = None, user = None,
-            bufsize = 0):
-        self.stdin = self.stdout = self.stderr = None
-        fdmap = { "stdin": stdin, "stdout": stdout, "stderr": stderr }
-        # if PIPE: all should be closed at the end
-        for k, v in fdmap.items():
-            if v == None:
-                continue
-            if v == PIPE:
-                r, w = os.pipe()
-                if k == "stdin":
-                    self.stdin = os.fdopen(w, 'wb', bufsize)
-                    fdmap[k] = r
-                else:
-                    setattr(self, k, os.fdopen(r, 'rb', bufsize))
-                    fdmap[k] = w
-            elif isinstance(v, int):
-                pass
-            else:
-                fdmap[k] = v.fileno()
-        if stderr == STDOUT:
-            fdmap['stderr'] = fdmap['stdout']
-
-        super(Popen, self).__init__(node, executable, argv = argv, cwd = cwd,
-                env = env, stdin = fdmap['stdin'], stdout = fdmap['stdout'],
-                stderr = fdmap['stderr'], user = user)
-
-        # Close pipes, they have been dup()ed to the child
-        for k, v in fdmap.items():
-            if getattr(self, k) != None:
-                _eintr_wrapper(os.close, v)
-
-        #self.universal_newlines = False # compat with subprocess.communicate
-
-    # No need to reinvent the wheel
-    #communicate = subprocess.communicate
-    #_communicate = subprocess._communicate
-    def communicate(self, input = None):
-        # almost verbatim from stdlib version
-        wset = []
-        rset = []
-        err = None
-        out = None
-        if self.stdin != None:
-            self.stdin.flush()
-            if input:
-                wset.append(self.stdin)
-            else:
-                self.stdin.close()
-        if self.stdout != None:
-            rset.append(self.stdout)
-            out = []
-        if self.stderr != None:
-            rset.append(self.stderr)
-            err = []
-
-        offset = 0
-        while rset or wset:
-            r, w, x = select.select(rset, wset, [])
-            if self.stdin in w:
-                offset += os.write(self.stdin.fileno(),
-                        #buffer(input, offset, select.PIPE_BUF))
-                        buffer(input, offset, 512)) # XXX: py2.7
-                if offset >= len(input):
-                    self.stdin.close()
-                    wset = []
-            for i in self.stdout, self.stderr:
-                if i in r:
-                    d = os.read(i.fileno(), 1024) # No need for eintr wrapper
-                    if d == "":
-                        i.close
-                        rset.remove(i)
-                    else:
-                        if i == self.stdout:
-                            out.append(d)
-                        else:
-                            err.append(d)
-
-        if out != None:
-            out = ''.join(out)
-        if err != None:
-            err = ''.join(err)
-        self.wait()
-        return (out, err)
-
 # internal stuff, do not look!
 
 def _eintr_wrapper(f, *args):
@@ -316,7 +324,6 @@ def _eintr_wrapper(f, *args):
                 continue
             else:
                 raise
-
 
 try:
     MAXFD = os.sysconf("SC_OPEN_MAX")
