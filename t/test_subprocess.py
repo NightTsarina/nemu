@@ -4,6 +4,8 @@
 import netns, netns.subprocess, test_util
 import grp, os, pwd, signal, sys, unittest
 
+from netns.subprocess import PIPE, STDOUT, spawn, Subprocess, Popen, wait
+
 def _stat(path):
     try:
         return os.stat(user)
@@ -69,78 +71,161 @@ class TestSubprocess(unittest.TestCase):
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_spawn_chuser(self):
         user = 'nobody'
-        pid = netns.subprocess.spawn('/bin/sleep', ['/bin/sleep', '100'],
-                user = user)
+        pid = spawn('/bin/sleep', ['/bin/sleep', '100'], user = user)
         self._check_ownership(user, pid)
         os.kill(pid, signal.SIGTERM)
-        self.assertEquals(netns.subprocess.wait(pid), signal.SIGTERM)
+        self.assertEquals(wait(pid), signal.SIGTERM)
 
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_Subprocess_chuser(self):
         node = netns.Node(nonetns = True)
         user = 'nobody'
-        p = netns.subprocess.Subprocess(node, '/bin/sleep',
-                ['/bin/sleep', '1000'], user = user)
+        p = Subprocess(node, '/bin/sleep', ['/bin/sleep', '1000'], user = user)
         self._check_ownership(user, p.pid)
         p.signal()
         self.assertEquals(p.wait(), -signal.SIGTERM)
 
     def test_spawn_basic(self):
         # User does not exist
-        self.assertRaises(ValueError, netns.subprocess.spawn,
+        self.assertRaises(ValueError, spawn,
                 '/bin/sleep', ['/bin/sleep', '1000'], user = self.nouser)
-        self.assertRaises(ValueError, netns.subprocess.spawn,
+        self.assertRaises(ValueError, spawn,
                 '/bin/sleep', ['/bin/sleep', '1000'], user = self.nouid)
         # Invalid CWD: it is a file
-        self.assertRaises(OSError, netns.subprocess.spawn,
-                '/bin/sleep', cwd = '/bin/sleep')
+        self.assertRaises(OSError, spawn, '/bin/sleep', cwd = '/bin/sleep')
         # Invalid CWD: does not exist
-        self.assertRaises(OSError, netns.subprocess.spawn,
-                '/bin/sleep', cwd = self.nofile)
+        self.assertRaises(OSError, spawn, '/bin/sleep', cwd = self.nofile)
         # Exec failure
-        self.assertRaises(OSError, netns.subprocess.spawn, self.nofile)
+        self.assertRaises(OSError, spawn, self.nofile)
 
         # Test that the environment is cleared: sleep should not be found
         # XXX: This should be a python bug: if I don't set PATH explicitly, it
         # uses a default search path
-        self.assertRaises(OSError, netns.subprocess.spawn,
-                'sleep', env = {'PATH': ''})
+        self.assertRaises(OSError, spawn, 'sleep', env = {'PATH': ''})
 
         r, w = os.pipe()
-        p = netns.subprocess.spawn('/bin/echo', ['echo', 'hello world'],
-                stdout = w)
+        p = spawn('/bin/echo', ['echo', 'hello world'], stdout = w)
         os.close(w)
         self.assertEquals(_readall(r), "hello world\n")
         os.close(r)
+
+        r0, w0 = os.pipe()
+        r1, w1 = os.pipe()
+        p = spawn('/bin/cat', stdout = w0, stdin = r1, close_fds = [r0, w1])
+        os.close(w0)
+        os.close(r1)
+        os.write(w1, "hello world\n")
+        os.close(w1)
+        self.assertEquals(_readall(r0), "hello world\n")
+        os.close(r0)
 
     def test_Subprocess_basic(self):
-        node = netns.Node(nonetns = True) #, debug = True)
+        node = netns.Node(nonetns = True)
         # User does not exist
-        self.assertRaises(RuntimeError, netns.subprocess.Subprocess, node,
+        self.assertRaises(RuntimeError, Subprocess, node,
                 '/bin/sleep', ['/bin/sleep', '1000'], user = self.nouser)
-        self.assertRaises(RuntimeError, netns.subprocess.Subprocess, node,
+        self.assertRaises(RuntimeError, Subprocess, node,
                 '/bin/sleep', ['/bin/sleep', '1000'], user = self.nouid)
         # Invalid CWD: it is a file
-        self.assertRaises(RuntimeError, netns.subprocess.Subprocess, node,
+        self.assertRaises(RuntimeError, Subprocess, node,
                 '/bin/sleep', cwd = '/bin/sleep')
         # Invalid CWD: does not exist
-        self.assertRaises(RuntimeError, netns.subprocess.Subprocess, node,
+        self.assertRaises(RuntimeError, Subprocess, node,
                 '/bin/sleep', cwd = self.nofile)
         # Exec failure
-        self.assertRaises(RuntimeError, netns.subprocess.Subprocess, node,
-                self.nofile)
+        self.assertRaises(RuntimeError, Subprocess, node, self.nofile)
         # Test that the environment is cleared: sleep should not be found
-        # XXX: This should be a python bug: if I don't set PATH explicitly, it
-        # uses a default search path
-        self.assertRaises(RuntimeError, netns.subprocess.Subprocess, node,
+        self.assertRaises(RuntimeError, Subprocess, node,
                 'sleep', env = {'PATH': ''})
-        # FIXME: tests fds
+        #import pdb; pdb.set_trace()
         r, w = os.pipe()
-        p = netns.subprocess.Subprocess(node, '/bin/echo',
-                ['echo', 'hello world'], stdout = w)
+        p = Subprocess(node, '/bin/echo', ['echo', 'hello world'], stdout = w)
         os.close(w)
         self.assertEquals(_readall(r), "hello world\n")
         os.close(r)
+
+    def test_Popen(self):
+        node = netns.Node(nonetns = True, debug=0)
+
+        # repeat test with Popen interface
+        r0, w0 = os.pipe()
+        r1, w1 = os.pipe()
+        p = Popen(node, '/bin/cat', stdout = w0, stdin = r1)
+        os.close(w0)
+        os.close(r1)
+        os.write(w1, "hello world\n")
+        os.close(w1)
+        self.assertEquals(_readall(r0), "hello world\n")
+        os.close(r0)
+
+        # pipes
+        p = Popen(node, '/bin/cat', stdin = PIPE, stdout = PIPE)
+        p.stdin.write("hello world\n")
+        p.stdin.close()
+        self.assertEquals(p.stdout.readlines(), ["hello world\n"])
+        self.assertEquals(p.stderr, None)
+        self.assertEquals(p.wait(), 0)
+
+        p = Popen(node, '/bin/cat', stdin = PIPE, stdout = PIPE)
+        self.assertEquals(p.communicate("hello world\n"),
+                ("hello world\n", None))
+
+        #
+        p = Popen(node, '/bin/sh', ['sh', '-c', 'cat >&2'],
+                stdin = PIPE, stderr = PIPE)
+        p.stdin.write("hello world\n")
+        p.stdin.close()
+        self.assertEquals(p.stderr.readlines(), ["hello world\n"])
+        self.assertEquals(p.stdout, None)
+        self.assertEquals(p.wait(), 0)
+
+        p = Popen(node, '/bin/sh', ['sh', '-c', 'cat >&2'],
+                stdin = PIPE, stderr = PIPE)
+        self.assertEquals(p.communicate("hello world\n"),
+                (None, "hello world\n"))
+
+        #
+        p = Popen(node, '/bin/sh', ['sh', '-c', 'cat >&2'],
+                stdin = PIPE, stdout = PIPE, stderr = STDOUT)
+        p.stdin.write("hello world\n")
+        p.stdin.close()
+        self.assertEquals(p.stdout.readlines(), ["hello world\n"])
+        self.assertEquals(p.stderr, None)
+        self.assertEquals(p.wait(), 0)
+
+        p = Popen(node, '/bin/sh', ['sh', '-c', 'cat >&2'],
+                stdin = PIPE, stdout = PIPE, stderr = STDOUT)
+        self.assertEquals(p.communicate("hello world\n"),
+                ("hello world\n", None))
+
+        #
+        p = Popen(node, 'tee', ['tee', '/dev/stderr'],
+                stdin = PIPE, stdout = PIPE, stderr = STDOUT)
+        p.stdin.write("hello world\n")
+        p.stdin.close()
+        self.assertEquals(p.stdout.readlines(), ["hello world\n"] * 2)
+        self.assertEquals(p.stderr, None)
+        self.assertEquals(p.wait(), 0)
+
+        p = Popen(node, 'tee', ['tee', '/dev/stderr'],
+                stdin = PIPE, stdout = PIPE, stderr = STDOUT)
+        self.assertEquals(p.communicate("hello world\n"),
+                ("hello world\n" * 2, None))
+
+        #
+        p = Popen(node, 'tee', ['tee', '/dev/stderr'],
+                stdin = PIPE, stdout = PIPE, stderr = PIPE)
+        p.stdin.write("hello world\n")
+        p.stdin.close()
+        self.assertEquals(p.stdout.readlines(), ["hello world\n"])
+        self.assertEquals(p.stderr.readlines(), ["hello world\n"])
+        self.assertEquals(p.wait(), 0)
+
+        p = Popen(node, 'tee', ['tee', '/dev/stderr'],
+                stdin = PIPE, stdout = PIPE, stderr = PIPE)
+        self.assertEquals(p.communicate("hello world\n"),
+                ("hello world\n",) * 2)
+
 
 # FIXME: tests for Popen!
 if __name__ == '__main__':

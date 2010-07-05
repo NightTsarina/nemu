@@ -100,12 +100,12 @@ class Server(object):
             s = str(code) + "-" + clean[i] + "\n"
             self._fd.write(s)
             if self.debug:
-                sys.stderr.write("Reply: %s" % s)
+                sys.stderr.write("<ans> %s" % s)
 
         s = str(code) + " " + clean[-1] + "\n"
         self._fd.write(s)
         if self.debug:
-            sys.stderr.write("Reply: %s" % s)
+            sys.stderr.write("<ans> %s" % s)
         return
 
     def readline(self):
@@ -114,6 +114,8 @@ class Server(object):
         if not line:
             self.closed = True
             return None
+        if self.debug:
+            sys.stderr.write("<C> %s" % line)
         return line.rstrip()
 
     def readchunk(self, size):
@@ -213,7 +215,7 @@ class Server(object):
 
         func = getattr(self, funcname)
         if self.debug:
-            sys.stderr.write("Command: %s, args: %s\n" % (cmdname, args))
+            sys.stderr.write("<cmd> %s, args: %s\n" % (cmdname, args))
         return (func, cmdname, args)
 
     def run(self):
@@ -295,6 +297,7 @@ class Server(object):
 
     def do_PROC_RUN(self, cmdname):
         try:
+#            self._proc['close_fds'] = True # forced
             chld = netns.subprocess.spawn(**self._proc)
         except:
             (t, v, tb) = sys.exc_info()
@@ -515,9 +518,9 @@ class Client(object):
 
 def _b64(text):
     text = str(text)
-    if filter(lambda x: ord(x) > ord(" ") and ord(x) <= ord("z")
-            and x != "=", text):
-        return text
-    else:
+    if filter(lambda x: ord(x) <= ord(" ") or ord(x) > ord("z")
+            or x == "=", text):
         return "=" + base64.b64encode(text)
+    else:
+        return text
 

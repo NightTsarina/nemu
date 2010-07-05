@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 # vim:ts=4:sw=4:et:ai:sts=4
 
-import fcntl, grp, os, pickle, pwd, signal, sys, traceback
+import fcntl, grp, os, pickle, pwd, signal, select, sys, traceback
 
-def spawn(executable, argv = None, cwd = None, env = None,
-        stdin = None, stdout = None, stderr = None, user = None):
+def spawn(executable, argv = None, cwd = None, env = None, stdin = None,
+        stdout = None, stderr = None, close_fds = False, user = None):
     """Forks and execs a program, with stdio redirection and user switching.
     The program is specified by `executable', if it does not contain any slash,
     the PATH environment variable is used to search for the file.
@@ -27,6 +27,9 @@ def spawn(executable, argv = None, cwd = None, env = None,
 
     Note that the original descriptors are not closed, and that piping should
     be handled externally.
+
+    When close_fds is True, it closes all file descriptors bigger than 2. It
+    can also be an iterable of file descriptors to close after fork.
     
     Exceptions occurred while trying to set up the environment or executing the
     program are propagated to the parent."""
@@ -66,10 +69,25 @@ def spawn(executable, argv = None, cwd = None, env = None,
                     os.dup2(userfd[i], i)
                     if userfd[i] != i and userfd[i] not in userfd[0:i]:
                         _eintr_wrapper(os.close, userfd[i]) # only in child!
+
             # Set up special control pipe
             _eintr_wrapper(os.close, r)
             flags = fcntl.fcntl(w, fcntl.F_GETFD)
             fcntl.fcntl(w, fcntl.F_SETFD, flags | fcntl.FD_CLOEXEC)
+
+            if close_fds == False:
+                pass
+            elif close_fds == True:
+                for i in xrange(3, MAXFD):
+                    if i != w:
+                        try:
+                            os.close(i)
+                        except:
+                            pass
+            else:
+                for i in close_fds:
+                    os.close(i)
+
             if user != None:
                 # Change user
                 os.setgid(gid)
@@ -137,6 +155,9 @@ def wait(pid):
     """Wait for process to die and return the exit code."""
     return _eintr_wrapper(os.waitpid, pid, 0)[1]
 
+
+# User-facing interfaces
+
 class Subprocess(object):
     # FIXME: this is the visible interface; documentation should move here.
     """OO-style interface to spawn(), but invoked through the controlling
@@ -186,7 +207,7 @@ class Subprocess(object):
         if os.WIFSIGNALED(self._returncode):
             return -os.WTERMSIG(self._returncode)
         if os.WIFEXITED(self._returncode):
-            return os.EXITSTATUS(self._returncode)
+            return os.WEXITSTATUS(self._returncode)
         raise RuntimeError("Invalid return code")
 
     # FIXME: do we have any other way to deal with this than having explicit
@@ -203,16 +224,16 @@ class Popen(Subprocess):
         self.stdin = self.stdout = self.stderr = None
         fdmap = { "stdin": stdin, "stdout": stdout, "stderr": stderr }
         # if PIPE: all should be closed at the end
-        for k, v in fdmap:
+        for k, v in fdmap.items():
             if v == None:
                 continue
             if v == PIPE:
                 r, w = os.pipe()
                 if k == "stdin":
-                    setattr(self, k, os.fdopen(w, 'wb', bufsize))
+                    self.stdin = os.fdopen(w, 'wb', bufsize)
                     fdmap[k] = r
                 else:
-                    setattr(self, k, os.fdopen(w, 'rb', bufsize))
+                    setattr(self, k, os.fdopen(r, 'rb', bufsize))
                     fdmap[k] = w
             elif isinstance(v, int):
                 pass
@@ -221,18 +242,69 @@ class Popen(Subprocess):
         if stderr == STDOUT:
             fdmap['stderr'] = fdmap['stdout']
 
-        #print fdmap
-
         super(Popen, self).__init__(node, executable, argv = argv, cwd = cwd,
                 env = env, stdin = fdmap['stdin'], stdout = fdmap['stdout'],
                 stderr = fdmap['stderr'], user = user)
 
         # Close pipes, they have been dup()ed to the child
-        for k, v in fdmap:
+        for k, v in fdmap.items():
             if getattr(self, k) != None:
                 _eintr_wrapper(os.close, v)
 
-#    def comunicate(self, input = None)
+        #self.universal_newlines = False # compat with subprocess.communicate
+
+    # No need to reinvent the wheel
+    #communicate = subprocess.communicate
+    #_communicate = subprocess._communicate
+    def communicate(self, input = None):
+        # almost verbatim from stdlib version
+        wset = []
+        rset = []
+        err = None
+        out = None
+        if self.stdin != None:
+            self.stdin.flush()
+            if input:
+                wset.append(self.stdin)
+            else:
+                self.stdin.close()
+        if self.stdout != None:
+            rset.append(self.stdout)
+            out = []
+        if self.stderr != None:
+            rset.append(self.stderr)
+            err = []
+
+        offset = 0
+        while rset or wset:
+            r, w, x = select.select(rset, wset, [])
+            if self.stdin in w:
+                offset += os.write(self.stdin.fileno(),
+                        #buffer(input, offset, select.PIPE_BUF))
+                        buffer(input, offset, 512)) # XXX: py2.7
+                if offset >= len(input):
+                    self.stdin.close()
+                    wset = []
+            for i in self.stdout, self.stderr:
+                if i in r:
+                    d = os.read(i.fileno(), 1024) # No need for eintr wrapper
+                    if d == "":
+                        i.close
+                        rset.remove(i)
+                    else:
+                        if i == self.stdout:
+                            out.append(d)
+                        else:
+                            err.append(d)
+
+        if out != None:
+            out = ''.join(out)
+        if err != None:
+            err = ''.join(err)
+        self.wait()
+        return (out, err)
+
+# internal stuff, do not look!
 
 def _eintr_wrapper(f, *args):
     "Wraps some callable with a loop that retries on EINTR"
@@ -244,6 +316,12 @@ def _eintr_wrapper(f, *args):
                 continue
             else:
                 raise
+
+
+try:
+    MAXFD = os.sysconf("SC_OPEN_MAX")
+except:
+    MAXFD = 256
 
 # Used to print extra info in nested exceptions
 def _custom_hook(t, v, tb):
