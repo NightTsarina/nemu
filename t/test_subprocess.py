@@ -4,7 +4,7 @@
 import netns, netns.subprocess, test_util
 import grp, os, pwd, signal, sys, unittest
 
-from netns.subprocess import PIPE, STDOUT, spawn, Subprocess, Popen, wait
+from netns.subprocess import *
 
 def _stat(path):
     try:
@@ -38,6 +38,7 @@ def _readall(fd):
             break
         s += s1
     return s
+_longstring = "Long string is long!\n" * 1000
 
 class TestSubprocess(unittest.TestCase):
     def _check_ownership(self, user, pid):
@@ -167,8 +168,7 @@ class TestSubprocess(unittest.TestCase):
         self.assertEquals(p.wait(), 0)
 
         p = Popen(node, '/bin/cat', stdin = PIPE, stdout = PIPE)
-        self.assertEquals(p.communicate("hello world\n"),
-                ("hello world\n", None))
+        self.assertEquals(p.communicate(_longstring), (_longstring, None))
 
         #
         p = Popen(node, '/bin/sh', ['sh', '-c', 'cat >&2'],
@@ -181,8 +181,7 @@ class TestSubprocess(unittest.TestCase):
 
         p = Popen(node, '/bin/sh', ['sh', '-c', 'cat >&2'],
                 stdin = PIPE, stderr = PIPE)
-        self.assertEquals(p.communicate("hello world\n"),
-                (None, "hello world\n"))
+        self.assertEquals(p.communicate(_longstring), (None, _longstring))
 
         #
         p = Popen(node, '/bin/sh', ['sh', '-c', 'cat >&2'],
@@ -195,8 +194,7 @@ class TestSubprocess(unittest.TestCase):
 
         p = Popen(node, '/bin/sh', ['sh', '-c', 'cat >&2'],
                 stdin = PIPE, stdout = PIPE, stderr = STDOUT)
-        self.assertEquals(p.communicate("hello world\n"),
-                ("hello world\n", None))
+        self.assertEquals(p.communicate(_longstring), (_longstring, None))
 
         #
         p = Popen(node, 'tee', ['tee', '/dev/stderr'],
@@ -209,8 +207,8 @@ class TestSubprocess(unittest.TestCase):
 
         p = Popen(node, 'tee', ['tee', '/dev/stderr'],
                 stdin = PIPE, stdout = PIPE, stderr = STDOUT)
-        self.assertEquals(p.communicate("hello world\n"),
-                ("hello world\n" * 2, None))
+        self.assertEquals(p.communicate(_longstring[0:512]),
+                (_longstring[0:512] * 2, None))
 
         #
         p = Popen(node, 'tee', ['tee', '/dev/stderr'],
@@ -223,9 +221,22 @@ class TestSubprocess(unittest.TestCase):
 
         p = Popen(node, 'tee', ['tee', '/dev/stderr'],
                 stdin = PIPE, stdout = PIPE, stderr = PIPE)
-        self.assertEquals(p.communicate("hello world\n"),
-                ("hello world\n",) * 2)
+        self.assertEquals(p.communicate(_longstring), (_longstring, ) * 2)
 
+    def test_backticks(self): 
+        node = netns.Node(nonetns = True, debug=0)
+        self.assertEquals(backticks(node, "echo hello world"), "hello world\n")
+        self.assertEquals(backticks(node, r"echo hello\ \ world"),
+                "hello  world\n")
+        self.assertEquals(backticks(node, ["echo", "echo", "hello", "world"]),
+                "hello world\n")
+        self.assertEquals(backticks(node, "echo hello world > /dev/null"), "")
+        self.assertRaises(RuntimeError, backticks_raise, node, "false")
+
+    def test_system(self): 
+        node = netns.Node(nonetns = True, debug=0)
+        self.assertEquals(system(node, "true"), 0)
+        self.assertEquals(system(node, "false"), 1)
 
 # FIXME: tests for Popen!
 if __name__ == '__main__':

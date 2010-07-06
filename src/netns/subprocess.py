@@ -3,19 +3,47 @@
 
 import fcntl, grp, os, pickle, pwd, signal, select, sys, traceback
 
-__all__ = [ 'PIPE', 'STDOUT', 'Popen', 'Subprocess', 'spawn', 'wait', 'poll' ]
+__all__ = [ 'PIPE', 'STDOUT', 'Popen', 'Subprocess', 'spawn', 'wait', 'poll',
+        'system', 'backticks', 'backticks_raise' ]
 
 # User-facing interfaces
 
 class Subprocess(object):
-    # FIXME: this is the visible interface; documentation should move here.
-    """OO-style interface to spawn(), but invoked through the controlling
-    process."""
+    """Class that allows the execution of programs inside a netns Node. This is
+    the base class for all process operations, Popen provides a more high level
+    interface."""
     # FIXME
     default_user = None
     def __init__(self, node, executable, argv = None, cwd = None, env = None,
             stdin = None, stdout = None, stderr = None, user = None):
         self._slave = node._slave
+        """Forks and execs a program, with stdio redirection and user
+        switching.
+        
+        A netns Node to run the program is is specified as the first parameter.
+
+        The program is specified by `executable', if it does not contain any
+        slash, the PATH environment variable is used to search for the file.
+
+        The `user` parameter, if not None, specifies a user name to run the
+        command as, after setting its primary and secondary groups. If a
+        numerical UID is given, a reverse lookup is performed to find the user
+        name and then set correctly the groups.
+
+        To run the program in a different directory than the current one, it
+        should be set in `cwd'.
+
+        If specified, `env' replaces the caller's environment with the
+        dictionary provided.
+
+        The standard input, output, and error of the created process will be
+        redirected to the file descriptors specified by `stdin`, `stdout`, and
+        `stderr`, respectively. These parameters must be open file objects,
+        integers, or None (for no redirection). Note that the descriptors will
+        not be closed by this class.
+        
+        Exceptions occurred while trying to set up the environment or executing
+        the program are propagated to the parent."""
 
         if user == None:
             user = Subprocess.default_user
@@ -32,9 +60,12 @@ class Subprocess(object):
 
     @property
     def pid(self):
+        """The real process ID of this subprocess."""
         return self._pid
 
     def poll(self):
+        """Checks status of program, returns exitcode or None if still running.
+        See Popen.poll."""
         r = self._slave.poll(self._pid)
         if r != None:
             del self._pid
@@ -42,15 +73,22 @@ class Subprocess(object):
         return self.returncode
 
     def wait(self):
+        """Waits for program to complete and returns the exitcode.
+        See Popen.wait"""
         self._returncode = self._slave.wait(self._pid)
         del self._pid
         return self.returncode
 
     def signal(self, sig = signal.SIGTERM):
+        """Sends a signal to the process."""
         return self._slave.signal(self._pid, sig)
 
     @property
     def returncode(self):
+        """When the program has finished (and has been waited for with
+        communicate, wait, or poll), returns the signal that killed the
+        program, if negative; otherwise, it is the exit code of the program.
+        """
         if self._returncode == None:
             return None
         if os.WIFSIGNALED(self._returncode):
@@ -67,9 +105,20 @@ class Subprocess(object):
 PIPE = -1
 STDOUT = -2
 class Popen(Subprocess):
+    """Higher-level interface for executing processes, that tries to emulate
+    the stdlib's subprocess.Popen as much as possible."""
+
     def __init__(self, node, executable, argv = None, cwd = None, env = None,
             stdin = None, stdout = None, stderr = None, user = None,
             bufsize = 0):
+        """As in Subprocess, `node' specifies the netns Node to run in.
+
+        The `stdin', `stdout', and `stderr' parameters also accept the special
+        values subprocess.PIPE or subprocess.STDOUT. Check the stdlib's
+        subprocess module for more details. `bufsize' specifies the buffer size
+        for the buffered IO provided for PIPE'd descriptors.
+        """
+
         self.stdin = self.stdout = self.stderr = None
         fdmap = { "stdin": stdin, "stdout": stdout, "stderr": stderr }
         # if PIPE: all should be closed at the end
@@ -107,6 +156,7 @@ class Popen(Subprocess):
     #communicate = subprocess.communicate
     #_communicate = subprocess._communicate
     def communicate(self, input = None):
+        """See Popen.communicate."""
         # FIXME: almost verbatim from stdlib version, need to be removed or
         # something
         wset = []
@@ -130,9 +180,10 @@ class Popen(Subprocess):
         while rset or wset:
             r, w, x = select.select(rset, wset, [])
             if self.stdin in w:
-                offset += os.write(self.stdin.fileno(),
+                wrote = os.write(self.stdin.fileno(),
                         #buffer(input, offset, select.PIPE_BUF))
                         buffer(input, offset, 512)) # XXX: py2.7
+                offset += wrote
                 if offset >= len(input):
                     self.stdin.close()
                     wset = []
@@ -155,41 +206,57 @@ class Popen(Subprocess):
         self.wait()
         return (out, err)
 
+def system(node, args):
+    """Emulates system() function, if `args' is an string, it uses `/bin/sh' to
+    exexecute it, otherwise is interpreted as the argv array to call execve."""
+    if isinstance(args, str):
+        args = [ '/bin/sh', '/bin/sh', '-c', args ]
+    return Popen(node, args[0], args[1:]).wait()
+
+def backticks(node, args):
+    """Emulates shell backticks, if `args' is an string, it uses `/bin/sh' to
+    exexecute it, otherwise is interpreted as the argv array to call execve."""
+    if isinstance(args, str):
+        args = [ '/bin/sh', '/bin/sh', '-c', args ]
+    return Popen(node, args[0], args[1:], stdout = PIPE).communicate()[0]
+
+def backticks_raise(node, args):
+    """Emulates shell backticks, if `args' is an string, it uses `/bin/sh' to
+    exexecute it, otherwise is interpreted as the argv array to call execve.
+    Raises an RuntimeError if the return value is not 0."""
+    if isinstance(args, str):
+        args = [ '/bin/sh', '/bin/sh', '-c', args ]
+    p = Popen(node, args[0], args[1:], stdout = PIPE)
+    out = p.communicate()[0]
+    if p.returncode > 0:
+        raise RuntimeError("Command failed with return code %d." %
+                p.returncode)
+    if p.returncode < 0:
+        raise RuntimeError("Command killed by signal %d." % -p.returncode)
+    return out
+
 # =======================================================================
 #
 # Server-side code, called from netns.protocol.Server
 
 def spawn(executable, argv = None, cwd = None, env = None, stdin = None,
         stdout = None, stderr = None, close_fds = False, user = None):
-    """Forks and execs a program, with stdio redirection and user switching.
-    The program is specified by `executable', if it does not contain any slash,
-    the PATH environment variable is used to search for the file.
+    """Internal function that performs all the dirty work for Subprocess, Popen
+    and friends. This is executed in the slave process, directly from the
+    protocol.Server class.
 
-    The `user` parameter, if not None, specifies a user name to run the
-    command as, after setting its primary and secondary groups. If a numerical
-    UID is given, a reverse lookup is performed to find the user name and
-    then set correctly the groups.
+    Parameters have the same meaning as the stdlib's subprocess.Popen class,
+    with one addition: the `user` parameter, if not None, specifies a user name
+    to run the command as, after setting its primary and secondary groups. If a
+    numerical UID is given, a reverse lookup is performed to find the user name
+    and then set correctly the groups.
 
-    To run the program in a different directory than the current one, it should
-    be set in `cwd'.
-
-    If specified, `env' replaces the caller's environment with the dictionary
-    provided.
-
-    The standard input, output, and error of the created process will be
-    redirected to the file descriptors specified by `stdin`, `stdout`, and
-    `stderr`, respectively. These parameters must be open file objects,
-    integers or None, in which case, no redirection will occur.
-
-    Note that the original descriptors are not closed, and that piping should
-    be handled externally.
-
-    When close_fds is True, it closes all file descriptors bigger than 2. It
+    When close_fds is True, it closes all file descriptors bigger than 2.  It
     can also be an iterable of file descriptors to close after fork.
-    
-    Exceptions occurred while trying to set up the environment or executing the
-    program are propagated to the parent."""
 
+    Note that 'std{in,out,err}' must be None, integers, or file objects, PIPE
+    is not supported here. Also, the original descriptors are not closed.
+    """
     userfd = [stdin, stdout, stderr]
     filtered_userfd = filter(lambda x: x != None and x >= 0, userfd)
     for i in range(3):
