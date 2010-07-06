@@ -35,6 +35,7 @@ coverage: all
 		set -e; \
 		PYTHONPATH="$(BUILDDIR):$$PYTHONPATH" $(COVERAGE) -x $$i; \
 		done
+	$(COVERAGE) -c
 	$(COVERAGE) -r -m `find "$(BUILDDIR)" -name \\*.py -type f`
 	rm -f .coverage
 

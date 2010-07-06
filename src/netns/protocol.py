@@ -494,7 +494,7 @@ class Client(object):
             exitcode = int(text.split()[0])
             return exitcode
         if code / 100 == 4:
-            return Null
+            return None
         else:
             raise "Error on command: %d %s" % (code, text)
 

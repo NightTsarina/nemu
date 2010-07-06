@@ -66,22 +66,21 @@ class Subprocess(object):
     def poll(self):
         """Checks status of program, returns exitcode or None if still running.
         See Popen.poll."""
-        r = self._slave.poll(self._pid)
-        if r != None:
-            del self._pid
-            self._returncode = r
+        if self._returncode == None:
+            self._returncode = self._slave.poll(self._pid)
         return self.returncode
 
     def wait(self):
         """Waits for program to complete and returns the exitcode.
         See Popen.wait"""
-        self._returncode = self._slave.wait(self._pid)
-        del self._pid
+        if self._returncode == None:
+            self._returncode = self._slave.wait(self._pid)
         return self.returncode
 
     def signal(self, sig = signal.SIGTERM):
         """Sends a signal to the process."""
-        return self._slave.signal(self._pid, sig)
+        if self._returncode == None:
+            self._slave.signal(self._pid, sig)
 
     @property
     def returncode(self):
@@ -95,7 +94,7 @@ class Subprocess(object):
             return -os.WTERMSIG(self._returncode)
         if os.WIFEXITED(self._returncode):
             return os.WEXITSTATUS(self._returncode)
-        raise RuntimeError("Invalid return code")
+        raise RuntimeError("Invalid return code") # pragma: no cover
 
     # FIXME: do we have any other way to deal with this than having explicit
     # destroy?
@@ -228,11 +227,11 @@ def backticks_raise(node, args):
         args = [ '/bin/sh', '/bin/sh', '-c', args ]
     p = Popen(node, args[0], args[1:], stdout = PIPE)
     out = p.communicate()[0]
-    if p.returncode > 0:
-        raise RuntimeError("Command failed with return code %d." %
-                p.returncode)
-    if p.returncode < 0:
-        raise RuntimeError("Command killed by signal %d." % -p.returncode)
+    ret = p.returncode
+    if ret > 0:
+        raise RuntimeError("Command failed with return code %d." % ret)
+    if ret < 0:
+        raise RuntimeError("Command killed by signal %d." % -ret)
     return out
 
 # =======================================================================
@@ -261,7 +260,7 @@ def spawn(executable, argv = None, cwd = None, env = None, stdin = None,
     filtered_userfd = filter(lambda x: x != None and x >= 0, userfd)
     for i in range(3):
         if userfd[i] != None and not isinstance(userfd[i], int):
-            userfd[i] = userfd[i].fileno()
+            userfd[i] = userfd[i].fileno() # pragma: no cover
 
     # Verify there is no clash
     assert not (set([0, 1, 2]) & set(filtered_userfd))
@@ -284,7 +283,8 @@ def spawn(executable, argv = None, cwd = None, env = None, stdin = None,
 
     (r, w) = os.pipe()
     pid = os.fork()
-    if pid == 0:
+    if pid == 0: # pragma: no cover
+        # coverage doesn't seem to understand fork
         try:
             # Set up stdio piping
             for i in range(3):
@@ -298,16 +298,14 @@ def spawn(executable, argv = None, cwd = None, env = None, stdin = None,
             flags = fcntl.fcntl(w, fcntl.F_GETFD)
             fcntl.fcntl(w, fcntl.F_SETFD, flags | fcntl.FD_CLOEXEC)
 
-            if close_fds == False:
-                pass
-            elif close_fds == True:
+            if close_fds == True:
                 for i in xrange(3, MAXFD):
                     if i != w:
                         try:
                             os.close(i)
                         except:
                             pass
-            else:
+            elif close_fds != False:
                 for i in close_fds:
                     os.close(i)
 
@@ -386,7 +384,7 @@ def _eintr_wrapper(f, *args):
     while True:
         try:
             return f(*args)
-        except OSError, e:
+        except OSError, e: # pragma: no cover
             if e.errno == errno.EINTR:
                 continue
             else:
@@ -394,11 +392,11 @@ def _eintr_wrapper(f, *args):
 
 try:
     MAXFD = os.sysconf("SC_OPEN_MAX")
-except:
+except: # pragma: no cover
     MAXFD = 256
 
 # Used to print extra info in nested exceptions
-def _custom_hook(t, v, tb):
+def _custom_hook(t, v, tb): # pragma: no cover
     if hasattr(v, "child_traceback"):
         sys.stderr.write("Nested exception, original traceback " +
                 "(most recent call last):\n")

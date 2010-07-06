@@ -2,7 +2,7 @@
 # vim:ts=4:sw=4:et:ai:sts=4
 
 import netns, netns.subprocess, test_util
-import grp, os, pwd, signal, sys, unittest
+import grp, os, pwd, signal, socket, sys, time, unittest
 
 from netns.subprocess import *
 
@@ -115,10 +115,12 @@ class TestSubprocess(unittest.TestCase):
         p = spawn('/bin/cat', stdout = w0, stdin = r1, close_fds = [r0, w1])
         os.close(w0)
         os.close(r1)
+        self.assertEquals(poll(p), None)
         os.write(w1, "hello world\n")
         os.close(w1)
         self.assertEquals(_readall(r0), "hello world\n")
         os.close(r0)
+        self.assertEquals(wait(p), 0)
 
     def test_Subprocess_basic(self):
         node = netns.Node(nonetns = True)
@@ -138,12 +140,29 @@ class TestSubprocess(unittest.TestCase):
         # Test that the environment is cleared: sleep should not be found
         self.assertRaises(RuntimeError, Subprocess, node,
                 'sleep', env = {'PATH': ''})
-        #import pdb; pdb.set_trace()
+
+        # Piping
         r, w = os.pipe()
-        p = Subprocess(node, '/bin/echo', ['echo', 'hello world'], stdout = w)
+        p = Subprocess(node, 'echo', ['echo', 'hello world'], stdout = w)
         os.close(w)
         self.assertEquals(_readall(r), "hello world\n")
         os.close(r)
+        p.wait()
+
+        p = Subprocess(node, 'sleep', ['sleep', '100'])
+        self.assertTrue(p.pid > 0)
+        self.assertEquals(p.poll(), None) # not finished
+        p.signal()
+        p.signal() # verify no-op (otherwise there will be an exception)
+        self.assertEquals(p.wait(), -signal.SIGTERM)
+        self.assertEquals(p.wait(), -signal.SIGTERM) # no-op
+        self.assertEquals(p.poll(), -signal.SIGTERM) # no-op
+
+        p = Subprocess(node, 'sleep', ['sleep', '100'])
+        os.kill(p.pid, signal.SIGTERM)
+        time.sleep(0.2)
+        p.signal() # since it has not been waited for, it should not raise
+        self.assertEquals(p.wait(), -signal.SIGTERM)
 
     def test_Popen(self):
         node = netns.Node(nonetns = True, debug=0)
@@ -151,7 +170,7 @@ class TestSubprocess(unittest.TestCase):
         # repeat test with Popen interface
         r0, w0 = os.pipe()
         r1, w1 = os.pipe()
-        p = Popen(node, '/bin/cat', stdout = w0, stdin = r1)
+        p = Popen(node, 'cat', stdout = w0, stdin = r1)
         os.close(w0)
         os.close(r1)
         os.write(w1, "hello world\n")
@@ -159,18 +178,32 @@ class TestSubprocess(unittest.TestCase):
         self.assertEquals(_readall(r0), "hello world\n")
         os.close(r0)
 
+        # now with a socketpair, not using integers
+        (s0, s1) = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM, 0)
+        p = Popen(node, 'cat', stdout = s0, stdin = s0)
+        s0.close()
+        s1.send("hello world\n")
+        self.assertEquals(s1.recv(512), "hello world\n")
+        s1.close()
+
         # pipes
-        p = Popen(node, '/bin/cat', stdin = PIPE, stdout = PIPE)
+        p = Popen(node, 'cat', stdin = PIPE, stdout = PIPE)
         p.stdin.write("hello world\n")
         p.stdin.close()
         self.assertEquals(p.stdout.readlines(), ["hello world\n"])
         self.assertEquals(p.stderr, None)
         self.assertEquals(p.wait(), 0)
 
-        p = Popen(node, '/bin/cat', stdin = PIPE, stdout = PIPE)
+        p = Popen(node, 'cat', stdin = PIPE, stdout = PIPE)
         self.assertEquals(p.communicate(_longstring), (_longstring, None))
 
-        #
+        p = Popen(node, 'cat', stdin = PIPE, stdout = PIPE)
+        p.stdin.write(_longstring)
+        self.assertEquals(p.communicate(), (_longstring, None))
+
+        p = Popen(node, 'cat', stdin = PIPE)
+        self.assertEquals(p.communicate(), (None, None))
+
         p = Popen(node, '/bin/sh', ['sh', '-c', 'cat >&2'],
                 stdin = PIPE, stderr = PIPE)
         p.stdin.write("hello world\n")
@@ -231,7 +264,9 @@ class TestSubprocess(unittest.TestCase):
         self.assertEquals(backticks(node, ["echo", "echo", "hello", "world"]),
                 "hello world\n")
         self.assertEquals(backticks(node, "echo hello world > /dev/null"), "")
+        self.assertEquals(backticks_raise(node, "true"), "")
         self.assertRaises(RuntimeError, backticks_raise, node, "false")
+        self.assertRaises(RuntimeError, backticks_raise, node, "kill $$")
 
     def test_system(self): 
         node = netns.Node(nonetns = True, debug=0)
