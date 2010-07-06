@@ -2,6 +2,7 @@
 # vim:ts=4:sw=4:et:ai:sts=4
 
 import re, subprocess, sys
+import netns.subprocess
 
 def process_ipcmd(str):
     cur = None
@@ -55,11 +56,11 @@ def get_devs():
     ipcmd = subprocess.Popen(["ip", "addr", "list"],
             stdout = subprocess.PIPE)
     (outdata, errdata) = ipcmd.communicate()
-    ipcmd.wait()
     return process_ipcmd(outdata)
 
 def get_devs_netns(node):
-    (outdata, errdata) = node.run_process(["ip", "addr", "list"])
+    (outdata, errdata) = netns.subprocess.backticks_raise(node,
+            ["ip", "addr", "list"])
     return process_ipcmd(outdata)
 
 # Unittest from Python 2.6 doesn't have these decorators

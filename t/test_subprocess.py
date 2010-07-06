@@ -81,7 +81,7 @@ class TestSubprocess(unittest.TestCase):
     def test_Subprocess_chuser(self):
         node = netns.Node(nonetns = True)
         user = 'nobody'
-        p = Subprocess(node, '/bin/sleep', ['/bin/sleep', '1000'], user = user)
+        p = Subprocess(node, ['/bin/sleep', '1000'], user = user)
         self._check_ownership(user, p.pid)
         p.signal()
         self.assertEquals(p.wait(), -signal.SIGTERM)
@@ -126,9 +126,9 @@ class TestSubprocess(unittest.TestCase):
         node = netns.Node(nonetns = True)
         # User does not exist
         self.assertRaises(RuntimeError, Subprocess, node,
-                '/bin/sleep', ['/bin/sleep', '1000'], user = self.nouser)
+                ['/bin/sleep', '1000'], user = self.nouser)
         self.assertRaises(RuntimeError, Subprocess, node,
-                '/bin/sleep', ['/bin/sleep', '1000'], user = self.nouid)
+                ['/bin/sleep', '1000'], user = self.nouid)
         # Invalid CWD: it is a file
         self.assertRaises(RuntimeError, Subprocess, node,
                 '/bin/sleep', cwd = '/bin/sleep')
@@ -141,15 +141,21 @@ class TestSubprocess(unittest.TestCase):
         self.assertRaises(RuntimeError, Subprocess, node,
                 'sleep', env = {'PATH': ''})
 
+        # Argv
+        self.assertRaises(RuntimeError, Subprocess, node, 'true; false')
+        self.assertEquals(Subprocess(node, 'true').wait(), 0)
+        self.assertEquals(Subprocess(node, 'true; false', shell = True).wait(),
+                1)
+
         # Piping
         r, w = os.pipe()
-        p = Subprocess(node, 'echo', ['echo', 'hello world'], stdout = w)
+        p = Subprocess(node, ['echo', 'hello world'], stdout = w)
         os.close(w)
         self.assertEquals(_readall(r), "hello world\n")
         os.close(r)
         p.wait()
 
-        p = Subprocess(node, 'sleep', ['sleep', '100'])
+        p = Subprocess(node, ['sleep', '100'])
         self.assertTrue(p.pid > 0)
         self.assertEquals(p.poll(), None) # not finished
         p.signal()
@@ -158,14 +164,14 @@ class TestSubprocess(unittest.TestCase):
         self.assertEquals(p.wait(), -signal.SIGTERM) # no-op
         self.assertEquals(p.poll(), -signal.SIGTERM) # no-op
 
-        p = Subprocess(node, 'sleep', ['sleep', '100'])
+        p = Subprocess(node, ['sleep', '100'])
         os.kill(p.pid, signal.SIGTERM)
         time.sleep(0.2)
         p.signal() # since it has not been waited for, it should not raise
         self.assertEquals(p.wait(), -signal.SIGTERM)
 
     def test_Popen(self):
-        node = netns.Node(nonetns = True, debug=0)
+        node = netns.Node(nonetns = True, debug = 0)
 
         # repeat test with Popen interface
         r0, w0 = os.pipe()
@@ -204,20 +210,18 @@ class TestSubprocess(unittest.TestCase):
         p = Popen(node, 'cat', stdin = PIPE)
         self.assertEquals(p.communicate(), (None, None))
 
-        p = Popen(node, '/bin/sh', ['sh', '-c', 'cat >&2'],
-                stdin = PIPE, stderr = PIPE)
+        p = Popen(node, 'cat >&2', shell = True, stdin = PIPE, stderr = PIPE)
         p.stdin.write("hello world\n")
         p.stdin.close()
         self.assertEquals(p.stderr.readlines(), ["hello world\n"])
         self.assertEquals(p.stdout, None)
         self.assertEquals(p.wait(), 0)
 
-        p = Popen(node, '/bin/sh', ['sh', '-c', 'cat >&2'],
-                stdin = PIPE, stderr = PIPE)
+        p = Popen(node, ['sh', '-c', 'cat >&2'], stdin = PIPE, stderr = PIPE)
         self.assertEquals(p.communicate(_longstring), (None, _longstring))
 
         #
-        p = Popen(node, '/bin/sh', ['sh', '-c', 'cat >&2'],
+        p = Popen(node, ['sh', '-c', 'cat >&2'],
                 stdin = PIPE, stdout = PIPE, stderr = STDOUT)
         p.stdin.write("hello world\n")
         p.stdin.close()
@@ -225,12 +229,12 @@ class TestSubprocess(unittest.TestCase):
         self.assertEquals(p.stderr, None)
         self.assertEquals(p.wait(), 0)
 
-        p = Popen(node, '/bin/sh', ['sh', '-c', 'cat >&2'],
+        p = Popen(node, ['sh', '-c', 'cat >&2'],
                 stdin = PIPE, stdout = PIPE, stderr = STDOUT)
         self.assertEquals(p.communicate(_longstring), (_longstring, None))
 
         #
-        p = Popen(node, 'tee', ['tee', '/dev/stderr'],
+        p = Popen(node, ['tee', '/dev/stderr'],
                 stdin = PIPE, stdout = PIPE, stderr = STDOUT)
         p.stdin.write("hello world\n")
         p.stdin.close()
@@ -238,13 +242,13 @@ class TestSubprocess(unittest.TestCase):
         self.assertEquals(p.stderr, None)
         self.assertEquals(p.wait(), 0)
 
-        p = Popen(node, 'tee', ['tee', '/dev/stderr'],
+        p = Popen(node, ['tee', '/dev/stderr'],
                 stdin = PIPE, stdout = PIPE, stderr = STDOUT)
         self.assertEquals(p.communicate(_longstring[0:512]),
                 (_longstring[0:512] * 2, None))
 
         #
-        p = Popen(node, 'tee', ['tee', '/dev/stderr'],
+        p = Popen(node, ['tee', '/dev/stderr'],
                 stdin = PIPE, stdout = PIPE, stderr = PIPE)
         p.stdin.write("hello world\n")
         p.stdin.close()
@@ -252,16 +256,16 @@ class TestSubprocess(unittest.TestCase):
         self.assertEquals(p.stderr.readlines(), ["hello world\n"])
         self.assertEquals(p.wait(), 0)
 
-        p = Popen(node, 'tee', ['tee', '/dev/stderr'],
+        p = Popen(node, ['tee', '/dev/stderr'],
                 stdin = PIPE, stdout = PIPE, stderr = PIPE)
         self.assertEquals(p.communicate(_longstring), (_longstring, ) * 2)
 
     def test_backticks(self): 
-        node = netns.Node(nonetns = True, debug=0)
+        node = netns.Node(nonetns = True, debug = 0)
         self.assertEquals(backticks(node, "echo hello world"), "hello world\n")
         self.assertEquals(backticks(node, r"echo hello\ \ world"),
                 "hello  world\n")
-        self.assertEquals(backticks(node, ["echo", "echo", "hello", "world"]),
+        self.assertEquals(backticks(node, ["echo", "hello", "world"]),
                 "hello world\n")
         self.assertEquals(backticks(node, "echo hello world > /dev/null"), "")
         self.assertEquals(backticks_raise(node, "true"), "")
@@ -269,7 +273,7 @@ class TestSubprocess(unittest.TestCase):
         self.assertRaises(RuntimeError, backticks_raise, node, "kill $$")
 
     def test_system(self): 
-        node = netns.Node(nonetns = True, debug=0)
+        node = netns.Node(nonetns = True, debug = 0)
         self.assertEquals(system(node, "true"), 0)
         self.assertEquals(system(node, "false"), 1)
 

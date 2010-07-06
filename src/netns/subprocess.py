@@ -14,8 +14,9 @@ class Subprocess(object):
     interface."""
     # FIXME
     default_user = None
-    def __init__(self, node, executable, argv = None, cwd = None, env = None,
-            stdin = None, stdout = None, stderr = None, user = None):
+    def __init__(self, node, argv, executable = None,
+            stdin = None, stdout = None, stderr = None,
+            shell = False, cwd = None, env = None, user = None):
         self._slave = node._slave
         """Forks and execs a program, with stdio redirection and user
         switching.
@@ -48,12 +49,16 @@ class Subprocess(object):
         if user == None:
             user = Subprocess.default_user
 
+        if isinstance(argv, str):
+            argv = [ argv ]
+        if shell:
+            argv = [ '/bin/sh', '-c' ] + argv
         # confusingly enough, to go to the function at the top of this file,
         # I need to call it thru the communications protocol: remember that
         # happens in another process!
-        self._pid = self._slave.spawn(executable, argv = argv, cwd = cwd,
-                env = env, stdin = stdin, stdout = stdout, stderr = stderr,
-                user = user)
+        self._pid = self._slave.spawn(argv, executable = executable,
+                stdin = stdin, stdout = stdout, stderr = stderr,
+                cwd = cwd, env = env, user = user)
 
         node._add_subprocess(self)
         self._returncode = None
@@ -107,9 +112,9 @@ class Popen(Subprocess):
     """Higher-level interface for executing processes, that tries to emulate
     the stdlib's subprocess.Popen as much as possible."""
 
-    def __init__(self, node, executable, argv = None, cwd = None, env = None,
-            stdin = None, stdout = None, stderr = None, user = None,
-            bufsize = 0):
+    def __init__(self, node, argv, executable = None,
+            stdin = None, stdout = None, stderr = None, bufsize = 0,
+            shell = False, cwd = None, env = None, user = None):
         """As in Subprocess, `node' specifies the netns Node to run in.
 
         The `stdin', `stdout', and `stderr' parameters also accept the special
@@ -139,9 +144,10 @@ class Popen(Subprocess):
         if stderr == STDOUT:
             fdmap['stderr'] = fdmap['stdout']
 
-        super(Popen, self).__init__(node, executable, argv = argv, cwd = cwd,
-                env = env, stdin = fdmap['stdin'], stdout = fdmap['stdout'],
-                stderr = fdmap['stderr'], user = user)
+        super(Popen, self).__init__(node, argv, executable = executable,
+                stdin = fdmap['stdin'], stdout = fdmap['stdout'],
+                stderr = fdmap['stderr'],
+                shell = shell, cwd = cwd, env = env, user = user)
 
         # Close pipes, they have been dup()ed to the child
         for k, v in fdmap.items():
@@ -208,24 +214,21 @@ class Popen(Subprocess):
 def system(node, args):
     """Emulates system() function, if `args' is an string, it uses `/bin/sh' to
     exexecute it, otherwise is interpreted as the argv array to call execve."""
-    if isinstance(args, str):
-        args = [ '/bin/sh', '/bin/sh', '-c', args ]
-    return Popen(node, args[0], args[1:]).wait()
+    shell = isinstance(args, str)
+    return Popen(node, args, shell = shell).wait()
 
 def backticks(node, args):
     """Emulates shell backticks, if `args' is an string, it uses `/bin/sh' to
     exexecute it, otherwise is interpreted as the argv array to call execve."""
-    if isinstance(args, str):
-        args = [ '/bin/sh', '/bin/sh', '-c', args ]
-    return Popen(node, args[0], args[1:], stdout = PIPE).communicate()[0]
+    shell = isinstance(args, str)
+    return Popen(node, args, shell = shell, stdout = PIPE).communicate()[0]
 
 def backticks_raise(node, args):
     """Emulates shell backticks, if `args' is an string, it uses `/bin/sh' to
     exexecute it, otherwise is interpreted as the argv array to call execve.
     Raises an RuntimeError if the return value is not 0."""
-    if isinstance(args, str):
-        args = [ '/bin/sh', '/bin/sh', '-c', args ]
-    p = Popen(node, args[0], args[1:], stdout = PIPE)
+    shell = isinstance(args, str)
+    p = Popen(node, args, shell = shell, stdout = PIPE)
     out = p.communicate()[0]
     ret = p.returncode
     if ret > 0:
@@ -238,8 +241,8 @@ def backticks_raise(node, args):
 #
 # Server-side code, called from netns.protocol.Server
 
-def spawn(executable, argv = None, cwd = None, env = None, stdin = None,
-        stdout = None, stderr = None, close_fds = False, user = None):
+def spawn(executable, argv = None, cwd = None, env = None, close_fds = False,
+        stdin = None, stdout = None, stderr = None, user = None):
     """Internal function that performs all the dirty work for Subprocess, Popen
     and friends. This is executed in the slave process, directly from the
     protocol.Server class.

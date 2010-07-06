@@ -437,17 +437,19 @@ class Client(object):
             raise
         self._read_and_check_reply()
 
-    def spawn(self, executable, argv = None, cwd = None, env = None,
-            stdin = None, stdout = None, stderr = None, user = None):
+    def spawn(self, argv, executable = None,
+            stdin = None, stdout = None, stderr = None,
+            cwd = None, env = None, user = None):
         """Start a subprocess in the slave; the interface resembles
         subprocess.Popen, but with less functionality. In particular
         stdin/stdout/stderr can only be None or a open file descriptor.
         See netns.subprocess.spawn for details."""
 
+        if executable == None:
+            executable = argv[0]
         params = ["PROC", "CRTE", _b64(executable)]
-        if argv != None:
-            for i in argv:
-                params.append(_b64(i))
+        for i in argv:
+            params.append(_b64(i))
 
         self._send_cmd(*params)
         self._read_and_check_reply()
