@@ -48,10 +48,6 @@ class Node(object):
         assert nexthop or interface
     def add_default_route(self, nexthop, interface = None):
         return self.add_route('0.0.0.0', 0, nexthop, interface)
-    def start_process(self, args):
-        return netns.subprocess.start_process(node, args)
-    def run_process(self, args):
-        return ("", "")
     def get_routes(self):
         return set()
 

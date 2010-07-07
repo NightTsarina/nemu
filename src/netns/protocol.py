@@ -7,7 +7,7 @@ try:
 except ImportError:
     from yaml import Loader, Dumper
 import base64, os, passfd, re, signal, socket, sys, traceback, unshare, yaml
-import netns.subprocess
+import netns.subprocess_
 
 # ============================================================================
 # Server-side protocol implementation
@@ -298,7 +298,7 @@ class Server(object):
     def do_PROC_RUN(self, cmdname):
         try:
 #            self._proc['close_fds'] = True # forced
-            chld = netns.subprocess.spawn(**self._proc)
+            chld = netns.subprocess_.spawn(**self._proc)
         except:
             (t, v, tb) = sys.exc_info()
             r = ["Failure starting process: %s" % str(v)]
@@ -330,9 +330,9 @@ class Server(object):
             self.reply(500, "Process does not exist.")
             return
         if cmdname == 'PROC POLL':
-            ret = netns.subprocess.poll(pid)
+            ret = netns.subprocess_.poll(pid)
         else:
-            ret = netns.subprocess.wait(pid)
+            ret = netns.subprocess_.wait(pid)
 
         if ret != None:
             self._children.remove(pid)
@@ -443,7 +443,7 @@ class Client(object):
         """Start a subprocess in the slave; the interface resembles
         subprocess.Popen, but with less functionality. In particular
         stdin/stdout/stderr can only be None or a open file descriptor.
-        See netns.subprocess.spawn for details."""
+        See netns.subprocess_.spawn for details."""
 
         if executable == None:
             executable = argv[0]

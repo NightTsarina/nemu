@@ -98,6 +98,7 @@ class TestInterfaces(unittest.TestCase):
                 prefix_len = 64)
 
         devs = get_devs_netns(node0)
+        print devs
         self.assertTrue( {
             'addr': '10.0.0.1', 'plen': 24,
             'bcast': '10.0.0.255', 'family': 'inet'

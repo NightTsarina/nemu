@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 # vim:ts=4:sw=4:et:ai:sts=4
 
-import netns, netns.subprocess, test_util
+import netns, netns.subprocess_, test_util
 import grp, os, pwd, signal, socket, sys, time, unittest
 
-from netns.subprocess import *
+from netns.subprocess_ import *
 
 def _stat(path):
     try:

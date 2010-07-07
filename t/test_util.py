@@ -2,7 +2,7 @@
 # vim:ts=4:sw=4:et:ai:sts=4
 
 import re, subprocess, sys
-import netns.subprocess
+import netns.subprocess_
 
 def process_ipcmd(str):
     cur = None
@@ -59,9 +59,8 @@ def get_devs():
     return process_ipcmd(outdata)
 
 def get_devs_netns(node):
-    (outdata, errdata) = netns.subprocess.backticks_raise(node,
-            ["ip", "addr", "list"])
-    return process_ipcmd(outdata)
+    out = netns.subprocess_.backticks_raise(node, ["ip", "addr", "list"])
+    return process_ipcmd(out)
 
 # Unittest from Python 2.6 doesn't have these decorators
 def skip(text):
