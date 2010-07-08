@@ -2,60 +2,34 @@
 
 import re, socket, subprocess, sys
 
-class interfaceflags(object):
-    @classmethod
-    def parse(cls, string):
-        l = string.split(",")
-        up          = "UP" in l
-        no_carrier  = "NO_CARRIER" in l
-        loopback    = "LOOPBACK" in l
-        broadcast   = "BROADCAST" in l
-        multicast   = "MULTICAST" in l
-        return cls(up, no_carrier, loopback, broadcast, multicast)
-    def __init__(self, up = None, no_carrier = None, loopback = None,
-            broadcast = None, multicast = None):
-        self.up         = up
-        self.no_carrier = no_carrier
-        self.loopback   = loopback
-        self.broadcast  = broadcast
-        self.multicast  = multicast
-    def __repr__(self):
-        s = "%s.%s(up = %s, no_carrier = %s, loopback = %s, broadcast = %s, "
-        s += "multicast = %s)"
-        return s % (self.__module__, self.__class__.__name__, self.up,
-                self.no_carrier, self.loopback, self.broadcast, self.multicast)
-    def __sub__(self, o):
-        """Compare flags and return a new object with just the flags that
-        differ set (with the value they have in self). The no-carrier,
-        broadcast, and loopback flags are ignored"""
-        up = None if self.up == o.up else self.up
-        #no_carrier = (None if self.no_carrier == o.no_carrier else
-        #        self.no_carrier)
-        #loopback = None if self.loopback == o.loopback else self.loopback
-        #broadcast = None if self.broadcast == o.broadcast else self.broadcast
-        multicast = None if self.multicast == o.multicast else self.multicast
-        return self.__class__(up, None, None, None, multicast)
-    def __eq__(self, o):
-        return (self.up == o.up and self.loopback == o.loopback and
-                self.broadcast == o.broadcast and
-                self.multicast == o.multicast)
-        
 class interface(object):
-    def __init__(self, index = None, name = None, flags = None, mtu = None,
-            qdisc = None, tipe = None, lladdr = None, broadcast = None,
+    @classmethod
+    def parse_ip(cls, line):
+        match = re.search(r'^(\d+): (\S+): <(\S+)> mtu (\d+) qdisc \S+' +
+                r'.*link/\S+ ([0-9a-f:]+) brd ([0-9a-f:]+)', line)
+        flags = match.group(3).split(",")
+        return cls(
+                index   = match.group(1),
+                name    = match.group(2),
+                up      = "UP" in flags,
+                mtu     = match.group(4),
+                lladdr  = match.group(5),
+                arp     = not ("NOARP" in flags),
+                broadcast = match.group(6),
+                multicast = "MULTICAST" in flags)
+
+    def __init__(self, index = None, name = None, up = None, mtu = None,
+            lladdr = None, broadcast = None, multicast = None, arp = None,
             addresses = None):
         self.index = int(index) if index else None
         self.name = name
-        self.flags = flags
+        self.up = up
         self.mtu = int(mtu) if mtu else None
-        self.qdisc = qdisc
-        self.type = tipe
         self.lladdr = lladdr
         self.broadcast = broadcast
-        if addresses:
-            self.addresses = addresses
-        else:
-            self.addresses = []
+        self.multicast = multicast
+        self.arp = arp
+        self.addresses = addresses if addresses else []
 
     def _set_addresses(self, value):
         if value == None:
@@ -71,28 +45,29 @@ class interface(object):
     addresses = property(_get_addresses, _set_addresses)
 
     def __repr__(self):
-        s = "%s.%s(index = %s, name = %s, flags = %s, mtu = %s, qdisc = %s, "
-        s += "tipe = %s, lladdr = %s, broadcast = %s, addresses = %s)"
+        s = "%s.%s(index = %s, name = %s, up = %s, mtu = %s, lladdr = %s, "
+        s += "broadcast = %s, multicast = %s, arp = %s, addresses = %s)"
         return s % (self.__module__, self.__class__.__name__,
                 self.index.__repr__(), self.name.__repr__(),
-                self.flags.__repr__(), self.mtu.__repr__(),
-                self.qdisc.__repr__(), self.type.__repr__(),
+                self.up.__repr__(), self.mtu.__repr__(),
                 self.lladdr.__repr__(), self.broadcast.__repr__(),
+                self.multicast.__repr__(), self.arp.__repr__(),
                 self.addresses.__repr__())
 
     def __sub__(self, o):
         """Compare attributes and return a new object with just the attributes
         that differ set (with the value they have in the first operand). The
-        index remains equal to the first operand; type and qdisc are
-        ignored."""
+        index remains equal to the first operand."""
         name = None if self.name == o.name else self.name
-        flags = None if self.flags == o.flags else self.flags - o.flags
+        up = None if self.up == o.up else self.up
         mtu = None if self.mtu == o.mtu else self.mtu
         lladdr = None if self.lladdr == o.lladdr else self.lladdr
         broadcast = None if self.broadcast == o.broadcast else self.broadcast
+        multicast = None if self.multicast == o.multicast else self.multicast
+        arp = None if self.arp == o.arp else self.arp
         addresses = None if self.addresses == o.addresses else self.addresses
-        return self.__class__(self.index, name, flags, mtu, None, None,
-                lladdr, broadcast, addresses)
+        return self.__class__(self.index, name, up, mtu, lladdr, broadcast,
+                multicast, arp, addresses)
 
 class address(object):
     @property
@@ -102,6 +77,23 @@ class address(object):
     @property
     def family(self): return self._family
 
+    @classmethod
+    def parse_ip(cls, line):
+        match = re.search(r'^inet ([0-9.]+)/(\d+)(?: brd ([0-9.]+))?', line)
+        if match != None:
+            return ipv4address(
+                address     = match.group(1),
+                prefix_len  = match.group(2),
+                broadcast   = match.group(3))
+
+        match = re.search(r'^inet6 ([0-9a-f:]+)/(\d+)', line)
+        if match != None:
+            return ipv6address(
+                address     = match.group(1),
+                prefix_len  = match.group(2))
+
+        raise RuntimeError("Problems parsing ip command output")
+ 
 class ipv4address(address):
     def __init__(self, address, prefix_len, broadcast):
         self._address = address
@@ -119,6 +111,8 @@ class ipv4address(address):
                 self.broadcast.__repr__())
 
     def __eq__(self, o):
+        if not isinstance(o, address):
+            return False
         return (self.address == o.address and
                 self.prefix_len == o.prefix_len and
                 self.broadcast == o.broadcast)
@@ -139,6 +133,8 @@ class ipv6address(address):
                 self.address.__repr__(), self.prefix_len)
 
     def __eq__(self, o):
+        if not isinstance(o, address):
+            return False
         return (self.address == o.address and self.prefix_len == o.prefix_len)
 
     def __hash__(self):
@@ -158,7 +154,7 @@ def get_if_data():
     ipdata = ipcmd.communicate()[0]
     assert ipcmd.wait() == 0
 
-    curidx = name = None
+    curidx = None
     byidx = {}
     bynam = {}
     for line in ipdata.split("\n"):
@@ -167,43 +163,17 @@ def get_if_data():
         match = re.search(r'^(\d+):\s+(.*)', line)
         if curidx != int(match.group(1)):
             curidx = int(match.group(1))
-
-            match = re.search(r'^(\d+): (\S+): <(\S+)> mtu (\d+) qdisc (\S+)' +
-                    r'.*link/(\S+) ([0-9a-f:]+) brd ([0-9a-f:]+)', line)
-            name = match.group(2)
-            byidx[curidx] = bynam[name] = interface(
-                    index   = curidx,
-                    name    = name,
-                    flags   = interfaceflags.parse(match.group(3)),
-                    mtu     = match.group(4),
-                    qdisc   = match.group(5),
-                    tipe    = match.group(6),
-                    lladdr  = match.group(7),
-                    broadcast = match.group(8),
-                    )
+            i = interface.parse_ip(line)
+            byidx[curidx] = bynam[i.name] = i
             continue
 
         # Assume curidx is defined
         assert curidx != None
 
-        match = re.search(("^%s: %s" % (curidx, name)) + r'\s+(.*)$', line)
+        match = re.search(("^%s: %s" % (curidx, byidx[curidx].name)) +
+                r'\s+(.*)$', line)
         line = match.group(1)
-
-        match = re.search(r'^inet ([0-9.]+)/(\d+)(?: brd ([0-9.]+))?', line)
-        if match != None:
-            byidx[curidx].addresses += [ipv4address(
-                address     = match.group(1),
-                prefix_len  = match.group(2),
-                broadcast   = match.group(3))]
-            continue
-
-        match = re.search(r'^inet6 ([0-9a-f:]+)/(\d+)', line)
-        if match != None:
-            byidx[curidx].addresses += [ipv6address(
-                address     = match.group(1),
-                prefix_len  = match.group(2))]
-            continue
-        raise RuntimeError("Problems parsing ip command output")
+        byidx[curidx].addresses += [address.parse_ip(line)]
     return byidx, bynam
 
 def create_if_pair(if1, if2):
@@ -214,11 +184,11 @@ def create_if_pair(if1, if2):
     for i in (0, 1):
         cmd[i] = ["name", iface[i].name]
         if iface[i].lladdr:
-            cmd[i].expand(["address", iface[i].lladdr])
+            cmd[i] += ["address", iface[i].lladdr]
         if iface[i].broadcast:
-            cmd[i].expand(["broadcast", iface[i].broadcast])
+            cmd[i] += ["broadcast", iface[i].broadcast]
         if iface[i].mtu:
-            cmd[i].expand(["mtu", str(iface[i].mtu)])
+            cmd[i] += ["mtu", str(iface[i].mtu)]
 
     cmd = ["ip", "link", "add"] + cmd[0] + ["type", "veth", "peer"] + cmd[1]
     execute(cmd)
@@ -244,24 +214,24 @@ def set_if(iface, recover = True):
     interface = get_real_if(iface)
     _ils = ["ip", "link", "set", "dev", interface.name]
     diff = iface - interface
-    commands = []
+    cmds = []
     if diff.name:
-        commands.append(_ils + ["name", diff.name])
+        cmds.append(_ils + ["name", diff.name])
     if diff.mtu:
-        commands.append(_ils + ["mtu", str(diff.mtu)])
+        cmds.append(_ils + ["mtu", str(diff.mtu)])
     if diff.lladdr:
-        commands.append(_ils + ["address", diff.lladdr])
+        cmds.append(_ils + ["address", diff.lladdr])
     if diff.broadcast:
-        commands.append(_ils + ["broadcast", diff.broadcast])
-    if diff.flags:
-        if diff.flags.up != None:
-            commands.append(_ils + ["up" if diff.flags.up else "down"])
-        if diff.flags.multicast != None:
-            commands.append(_ils + ["multicast",
-                "on" if diff.flags.multicast else "off"])
+        cmds.append(_ils + ["broadcast", diff.broadcast])
+    if diff.up != None:
+        cmds.append(_ils + ["up" if diff.up else "down"])
+    if diff.multicast != None:
+        cmds.append(_ils + ["multicast", "on" if diff.multicast else "off"])
+    if diff.arp != None:
+        cmds.append(_ils + ["arp", "on" if diff.arp else "off"])
 
-    #print commands
-    for c in commands:
+    #print cmds
+    for c in cmds:
         try:
             execute(c)
         except:
@@ -311,6 +281,8 @@ def set_addr(iface, recover = True):
                 raise
     return get_real_if(iface)
 
+# Useful stuff
+
 def execute(cmd):
     print " ".join(cmd)#; return
     null = open('/dev/null', 'r+')
@@ -320,8 +292,14 @@ def execute(cmd):
         raise RuntimeError("Error executing `%s': %s" % (" ".join(cmd), err))
 
 def get_real_if(iface):
-    if iface.index != None:
-        return get_if_data()[0][iface.index]
-    else:
-        return get_if_data()[1][iface.name]
+    ifdata = get_if_data()
+    if isinstance(iface, interface):
+        if iface.index != None:
+            return ifdata[0][iface.index]
+        else:
+            return ifdata[1][iface.name]
+    if isinstance(iface, int):
+        return ifdata[0][iface]
+    return ifdata[1][iface]
+
 
