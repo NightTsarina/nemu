@@ -154,12 +154,6 @@ class Popen(Subprocess):
             if getattr(self, k) != None:
                 _eintr_wrapper(os.close, v)
 
-        #self.universal_newlines = False # compat with subprocess.communicate
-
-    # No need to reinvent the wheel: damnit, stupid python namespace handling
-    # won't allow me to reference another module called subprocess...
-    #communicate = subprocess.communicate
-    #_communicate = subprocess._communicate
     def communicate(self, input = None):
         """See Popen.communicate."""
         # FIXME: almost verbatim from stdlib version, need to be removed or
