@@ -19,8 +19,7 @@ class interface(object):
                 multicast = "MULTICAST" in flags)
 
     def __init__(self, index = None, name = None, up = None, mtu = None,
-            lladdr = None, broadcast = None, multicast = None, arp = None,
-            addresses = None):
+            lladdr = None, broadcast = None, multicast = None, arp = None):
         self.index = int(index) if index else None
         self.name = name
         self.up = up
@@ -29,30 +28,15 @@ class interface(object):
         self.broadcast = broadcast
         self.multicast = multicast
         self.arp = arp
-        self.addresses = addresses if addresses else []
-
-    def _set_addresses(self, value):
-        if value == None:
-            self._addresses = None
-            return
-        assert len(value) == len(set(value))
-        self._addresses = list(value)
-
-    def _get_addresses(self):
-        if self._addresses != None:
-            return list(self._addresses) # Copy, to make this inmutable
-
-    addresses = property(_get_addresses, _set_addresses)
 
     def __repr__(self):
         s = "%s.%s(index = %s, name = %s, up = %s, mtu = %s, lladdr = %s, "
-        s += "broadcast = %s, multicast = %s, arp = %s, addresses = %s)"
+        s += "broadcast = %s, multicast = %s, arp = %s)"
         return s % (self.__module__, self.__class__.__name__,
                 self.index.__repr__(), self.name.__repr__(),
                 self.up.__repr__(), self.mtu.__repr__(),
                 self.lladdr.__repr__(), self.broadcast.__repr__(),
-                self.multicast.__repr__(), self.arp.__repr__(),
-                self.addresses.__repr__())
+                self.multicast.__repr__(), self.arp.__repr__())
 
     def __sub__(self, o):
         """Compare attributes and return a new object with just the attributes
@@ -65,18 +49,10 @@ class interface(object):
         broadcast = None if self.broadcast == o.broadcast else self.broadcast
         multicast = None if self.multicast == o.multicast else self.multicast
         arp = None if self.arp == o.arp else self.arp
-        addresses = None if self.addresses == o.addresses else self.addresses
         return self.__class__(self.index, name, up, mtu, lladdr, broadcast,
-                multicast, arp, addresses)
+                multicast, arp)
 
 class address(object):
-    @property
-    def address(self): return self._address
-    @property
-    def prefix_len(self): return self._prefix_len
-    @property
-    def family(self): return self._family
-
     @classmethod
     def parse_ip(cls, line):
         match = re.search(r'^inet ([0-9.]+)/(\d+)(?: brd ([0-9.]+))?', line)
@@ -93,16 +69,27 @@ class address(object):
                 prefix_len  = match.group(2))
 
         raise RuntimeError("Problems parsing ip command output")
+
+    def __eq__(self, o):
+        if not isinstance(o, address):
+            return False
+        return (self.family == o.family and self.address == o.address and
+                self.prefix_len == o.prefix_len and
+                self.broadcast == o.broadcast)
+
+    def __hash__(self):
+        h = (self.address.__hash__() ^ self.prefix_len.__hash__() ^
+                self.family.__hash__())
+        if hasattr(self, 'broadcast'):
+            h ^= self.broadcast.__hash__()
+        return h
  
 class ipv4address(address):
     def __init__(self, address, prefix_len, broadcast):
-        self._address = address
-        self._prefix_len = int(prefix_len)
-        self._broadcast = broadcast
-        self._family = socket.AF_INET
-
-    @property
-    def broadcast(self): return self._broadcast
+        self.address = address
+        self.prefix_len = int(prefix_len)
+        self.broadcast = broadcast
+        self.family = socket.AF_INET
 
     def __repr__(self):
         s = "%s.%s(address = %s, prefix_len = %d, broadcast = %s)"
@@ -110,70 +97,64 @@ class ipv4address(address):
                 self.address.__repr__(), self.prefix_len,
                 self.broadcast.__repr__())
 
-    def __eq__(self, o):
-        if not isinstance(o, address):
-            return False
-        return (self.address == o.address and
-                self.prefix_len == o.prefix_len and
-                self.broadcast == o.broadcast)
-
-    def __hash__(self):
-        return (self._address.__hash__() ^ self._prefix_len.__hash__() ^
-                self._family.__hash__()) ^ self._broadcast.__hash__()
-
 class ipv6address(address):
     def __init__(self, address, prefix_len):
-        self._address = address
-        self._prefix_len = int(prefix_len)
-        self._family = socket.AF_INET6
+        self.address = address
+        self.prefix_len = int(prefix_len)
+        self.family = socket.AF_INET6
 
     def __repr__(self):
         s = "%s.%s(address = %s, prefix_len = %d)"
         return s % (self.__module__, self.__class__.__name__,
                 self.address.__repr__(), self.prefix_len)
 
-    def __eq__(self, o):
-        if not isinstance(o, address):
-            return False
-        return (self.address == o.address and self.prefix_len == o.prefix_len)
-
-    def __hash__(self):
-        return (self._address.__hash__() ^ self._prefix_len.__hash__() ^
-                self._family.__hash__())
-
 # XXX: ideally this should be replaced by netlink communication
 def get_if_data():
-    """Gets current interface and addresses information. Returns a tuple
-    (byidx, bynam) in which each element is a dictionary with the same data,
-    but using different keys: interface indexes and interface names.
+    """Gets current interface information. Returns a tuple (byidx, bynam) in
+    which each element is a dictionary with the same data, but using different
+    keys: interface indexes and interface names.
 
     In each dictionary, values are interface objects.
     """
-    ipcmd = subprocess.Popen(["ip", "-o", "addr", "list"],
+    ipcmd = subprocess.Popen(["ip", "-o", "link", "list"],
         stdout = subprocess.PIPE)
     ipdata = ipcmd.communicate()[0]
     assert ipcmd.wait() == 0
 
-    curidx = None
     byidx = {}
     bynam = {}
     for line in ipdata.split("\n"):
         if line == "":
             continue
         match = re.search(r'^(\d+):\s+(.*)', line)
-        if curidx != int(match.group(1)):
-            curidx = int(match.group(1))
-            i = interface.parse_ip(line)
-            byidx[curidx] = bynam[i.name] = i
+        idx = int(match.group(1))
+        i = interface.parse_ip(line)
+        byidx[idx] = bynam[i.name] = i
+    return byidx, bynam
+
+def get_addr_data():
+    ipcmd = subprocess.Popen(["ip", "-o", "addr", "list"],
+        stdout = subprocess.PIPE)
+    ipdata = ipcmd.communicate()[0]
+    assert ipcmd.wait() == 0
+
+    byidx = {}
+    bynam = {}
+    for line in ipdata.split("\n"):
+        if line == "":
             continue
+        match = re.search(r'^(\d+):\s+(\S+?)(:?)\s+(.*)', line)
+        if not match:
+            raise RuntimeError("Invalid `ip' command output")
+        idx = int(match.group(1))
+        name = match.group(2)
+        if match.group(3):
+            continue # link info
 
-        # Assume curidx is defined
-        assert curidx != None
-
-        match = re.search(("^%s: %s" % (curidx, byidx[curidx].name)) +
-                r'\s+(.*)$', line)
-        line = match.group(1)
-        byidx[curidx].addresses += [address.parse_ip(line)]
+        if name not in bynam:
+            assert idx not in byidx
+            bynam[name] = byidx[idx] = []
+        bynam[name].append(address.parse_ip(match.group(4)))
     return byidx, bynam
 
 def create_if_pair(if1, if2):

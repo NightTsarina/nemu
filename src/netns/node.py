@@ -21,7 +21,7 @@ class Node(object):
         communication protocol are printed on stderr."""
         fd, pid = _start_child(debug, nonetns)
         self._pid = pid
-        self._slave = netns.protocol.Client(fd, debug)
+        self._slave = netns.protocol.Client(fd, fd, debug)
         self._processes = weakref.WeakValueDictionary()
         Node._nodes[Node._nextnode] = self
         Node._nextnode += 1
@@ -77,7 +77,7 @@ def _start_child(debug, nonetns):
     # FIXME: clean up signal handers, atexit functions, etc.
     try:
         s0.close()
-        srv = netns.protocol.Server(s1, debug)
+        srv = netns.protocol.Server(s1, s1, debug)
         if not nonetns:
             unshare.unshare(unshare.CLONE_NEWNET)
         srv.run()

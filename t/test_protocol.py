@@ -13,11 +13,11 @@ class TestServer(unittest.TestCase):
         pid = os.fork()
         if not pid:
             s1.close()
-            srv = netns.protocol.Server(s0)
+            srv = netns.protocol.Server(s0, s0)
             srv.run()
 
             s3.close()
-            srv = netns.protocol.Server(s2.fileno())
+            srv = netns.protocol.Server(s2.fileno(), s2.fileno())
             srv.run()
 
             os._exit(0)
@@ -39,10 +39,10 @@ class TestServer(unittest.TestCase):
         pid = os.fork()
         if not pid:
             s1.close()
-            srv = netns.protocol.Server(s0)
+            srv = netns.protocol.Server(s0, s0)
             srv.run()
             os._exit(0)
-        cli = netns.protocol.Client(s1)
+        cli = netns.protocol.Client(s1, s1)
         s0.close()
 
         # make PROC SIN fail
@@ -57,7 +57,7 @@ class TestServer(unittest.TestCase):
 
     def test_basic_stuff(self):
         (s0, s1) = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM, 0)
-        srv = netns.protocol.Server(s0)
+        srv = netns.protocol.Server(s0, s0)
         s1 = s1.makefile("r+", 1)
 
         def check_error(self, cmd, code = 500):
@@ -87,10 +87,8 @@ class TestServer(unittest.TestCase):
         check_error(self, "proc abrt")
         check_error(self, "proc run")
 
-        # not implemented
-        #check_ok(self, "if list", srv.do_IF_LIST, [])
-        #check_ok(self, "if list 1", srv.do_IF_LIST, [1])
-        check_error(self, "if list")
+        check_ok(self, "if list", srv.do_IF_LIST, [])
+        check_ok(self, "if list 1", srv.do_IF_LIST, [1])
 
         check_error(self, "proc poll") # missing arg
         check_error(self, "proc poll 1 2") # too many args

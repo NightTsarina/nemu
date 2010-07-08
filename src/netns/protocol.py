@@ -7,7 +7,7 @@ try:
 except ImportError:
     from yaml import Loader, Dumper
 import base64, os, passfd, re, signal, socket, sys, traceback, unshare, yaml
-import netns.subprocess_
+import netns.subprocess_, netns.iproute
 
 # ============================================================================
 # Server-side protocol implementation
@@ -65,7 +65,7 @@ class Server(object):
     """Class that implements the communication protocol and dispatches calls to
     the required functions. Also works as the main loop for the slave
     process."""
-    def __init__(self, fd, debug = False):
+    def __init__(self, rfd, wfd, debug = False):
         # Dictionary of valid commands
         self.commands = _proto_commands
         # Flag to stop the server
@@ -77,16 +77,8 @@ class Server(object):
         # Buffer and flag for PROC mode
         self._proc = None
 
-        if hasattr(fd, "readline"):
-            self._fd = fd
-        else:
-            # Since openfd insists on closing the fd on destruction, I need to
-            # dup()
-            if hasattr(fd, "fileno"):
-                nfd = os.dup(fd.fileno())
-            else:
-                nfd = os.dup(fd)
-            self._fd = os.fdopen(nfd, "r+", 1)
+        self._rfd = _get_file(rfd, "r")
+        self._wfd = _get_file(wfd, "w")
 
     def reply(self, code, text):
         "Send back a reply to the client; handle multiline messages"
@@ -98,19 +90,19 @@ class Server(object):
             clean.extend(i.splitlines())
         for i in range(len(clean) - 1):
             s = str(code) + "-" + clean[i] + "\n"
-            self._fd.write(s)
+            self._wfd.write(s)
             if self.debug:
                 sys.stderr.write("<ans> %s" % s)
 
         s = str(code) + " " + clean[-1] + "\n"
-        self._fd.write(s)
+        self._wfd.write(s)
         if self.debug:
             sys.stderr.write("<ans> %s" % s)
         return
 
     def readline(self):
         "Read a line from the socket and detect connection break-up."
-        line = self._fd.readline()
+        line = self._rfd.readline()
         if not line:
             self.closed = True
             return None
@@ -124,7 +116,7 @@ class Server(object):
         res = ""
 
         while True:
-            line = self._fd.readline()
+            line = self._rfd.readline()
             if not line:
                 self.closed = True
                 return None
@@ -228,7 +220,8 @@ class Server(object):
                 continue
             cmd[0](cmd[1], *cmd[2])
         try:
-            self._fd.close()
+            self._rfd.close()
+            self._wfd.close()
         except:
             pass
         # FIXME: cleanup
@@ -279,7 +272,7 @@ class Server(object):
                 cmdname)
 
         try:
-            fd, payload = passfd.recvfd(self._fd, len(cmdname) + 1)
+            fd, payload = passfd.recvfd(self._rfd, len(cmdname) + 1)
         except (IOError, BaseException), e: # FIXME
             self.reply(500, "Error receiving FD: %s" % str(e))
             return
@@ -297,7 +290,7 @@ class Server(object):
 
     def do_PROC_RUN(self, cmdname):
         try:
-#            self._proc['close_fds'] = True # forced
+            self._proc['close_fds'] = True # forced
             chld = netns.subprocess_.spawn(**self._proc)
         except:
             (t, v, tb) = sys.exc_info()
@@ -353,7 +346,13 @@ class Server(object):
             os.kill(pid, signal.SIGTERM)
         self.reply(200, "Process signalled.")
 
-#    def do_IF_LIST(self, cmdname, ifnr = None):
+    def do_IF_LIST(self, cmdname, ifnr = None):
+        ifdata = netns.iproute.get_if_data()[0]
+        if ifnr != None:
+            ifdata = ifdata[ifnr]
+        self.reply(200, ["# Interface data follows."] +
+                yaml.dump(ifdata).split("\n"))
+
 #    def do_IF_SET(self, cmdname, ifnr, key, val):
 #    def do_IF_RTRN(self, cmdname, ifnr, netns):
 #    def do_ADDR_LIST(self, cmdname, ifnr = None):
@@ -370,32 +369,22 @@ class Server(object):
 class Client(object):
     """Client-side implementation of the communication protocol. Acts as a RPC
     service."""
-    def __init__(self, fd, debug = False):
-        # XXX: In some cases we do not call dup(); maybe this should be
-        # consistent?
-        if not hasattr(fd, "readline"):
-            # Since openfd insists on closing the fd on destruction, I need to
-            # dup()
-            if hasattr(fd, "fileno"):
-                nfd = os.dup(fd.fileno())
-            else:
-                nfd = os.dup(fd)
-            fd = os.fdopen(nfd, "r+", 1)
-
-        self._fd = fd
+    def __init__(self, rfd, wfd, debug = False):
+        self._rfd = _get_file(rfd, "r")
+        self._wfd = _get_file(wfd, "w")
         # Wait for slave to send banner
         self._read_and_check_reply()
 
     def _send_cmd(self, *args):
         s = " ".join(map(str, args)) + "\n"
-        self._fd.write(s)
+        self._wfd.write(s)
 
     def _read_reply(self):
         """Reads a (possibly multi-line) response from the server. Returns a
         tuple containing (code, text)"""
         text = []
         while True:
-            line = self._fd.readline().rstrip()
+            line = self._rfd.readline().rstrip()
             if not line:
                 raise RuntimeError("Protocol error, empty line received")
 
@@ -428,10 +417,10 @@ class Client(object):
         self._send_cmd("PROC", name)
         self._read_and_check_reply(3)
         try:
-            passfd.sendfd(self._fd, fd, "PROC " + name)
+            passfd.sendfd(self._wfd, fd, "PROC " + name)
         except:
             # need to fill the buffer on the other side, nevertheless
-            self._fd.write("=" * (len(name) + 5))
+            self._wfd.write("=" * (len(name) + 5) + "\n")
             # And also read the expected error
             self._read_and_check_reply(5)
             raise
@@ -525,4 +514,15 @@ def _b64(text):
         return "=" + base64.b64encode(text)
     else:
         return text
+
+def _get_file(fd, mode):
+    # XXX: In some cases we do not call dup(); maybe this should be consistent?
+    if hasattr(fd, "readline"):
+        return fd
+    # Since openfd insists on closing the fd on destruction, I need to dup()
+    if hasattr(fd, "fileno"):
+        nfd = os.dup(fd.fileno())
+    else:
+        nfd = os.dup(fd)
+    return os.fdopen(nfd, mode, 1)
 
