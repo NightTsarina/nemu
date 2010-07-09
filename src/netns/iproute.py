@@ -149,11 +149,8 @@ def get_addr_data():
         idx = int(match.group(1))
         name = match.group(2)
         if match.group(3):
-            continue # link info
-
-        if name not in bynam:
-            assert idx not in byidx
             bynam[name] = byidx[idx] = []
+            continue # link info
         bynam[name].append(address.parse_ip(match.group(4)))
     return byidx, bynam
 

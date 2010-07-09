@@ -349,13 +349,26 @@ class Server(object):
     def do_IF_LIST(self, cmdname, ifnr = None):
         ifdata = netns.iproute.get_if_data()[0]
         if ifnr != None:
+            if ifnr not in ifdata:
+                self.reply(500, "Interface not found.")
+                return
             ifdata = ifdata[ifnr]
         self.reply(200, ["# Interface data follows."] +
                 yaml.dump(ifdata).split("\n"))
 
 #    def do_IF_SET(self, cmdname, ifnr, key, val):
 #    def do_IF_RTRN(self, cmdname, ifnr, netns):
-#    def do_ADDR_LIST(self, cmdname, ifnr = None):
+
+    def do_ADDR_LIST(self, cmdname, ifnr = None):
+        addrdata = netns.iproute.get_addr_data()[0]
+        if ifnr != None:
+            if ifnr not in addrdata:
+                self.reply(500, "Interface not found.")
+                return
+            addrdata = addrdata[ifnr]
+        self.reply(200, ["# Address data follows."] +
+                yaml.dump(addrdata).split("\n"))
+
 #    def do_ADDR_ADD(self, cmdname, ifnr, address, prefixlen, broadcast = None):
 #    def do_ADDR_DEL(self, cmdname, ifnr, address, prefixlen):
 #    def do_ROUT_LIST(self, cmdname):
@@ -504,8 +517,25 @@ class Client(object):
             self._send_cmd("PROC", "KILL", pid, sig)
         else:
             self._send_cmd("PROC", "KILL", pid)
-        text = self._read_and_check_reply()
+        self._read_and_check_reply()
 
+    def get_if_data(self, ifnr = None):
+        if ifnr:
+            self._send_cmd("IF", "LIST", ifnr)
+        else:
+            self._send_cmd("IF", "LIST")
+        data = self._read_and_check_reply()
+        data = data.partition("\n")[2] # ignore first line
+        return yaml.load(data)
+
+    def get_addr_data(self, ifnr = None):
+        if ifnr:
+            self._send_cmd("ADDR", "LIST", ifnr)
+        else:
+            self._send_cmd("ADDR", "LIST")
+        data = self._read_and_check_reply()
+        data = data.partition("\n")[2] # ignore first line
+        return yaml.load(data)
 
 def _b64(text):
     text = str(text)
