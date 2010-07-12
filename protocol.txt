@@ -11,7 +11,7 @@ replies with 221 code.
 Command	Subcmd	Arguments	Response		Effect
 QUIT				221			Close the netns
 IF	LIST	[if#]		200 serialised data	ip link list
-IF	SET	if# key val	200/500			ip link set (1)
+IF	SET	if# k v k v...	200/500			ip link set (1)
 IF	RTRN	if# ns		200/500			ip link set netns $ns
 ADDR	LIST	[if#]		200 serialised data	ip addr list
 ADDR	ADD	if# addr_spec	200/500			ip addr add
@@ -32,7 +32,8 @@ PROC	POLL	<pid>		200 <code>/450/500	check if process alive
 PROC	WAIT	<pid>		200 <code>/500		waitpid(pid)
 PROC	KILL	<pid> <signal>	200/500			kill(pid, signal)
 
-(1) valid arguments: mtu <n>, state <up|down>, name <name>, lladdr <addr>
+(1) valid arguments: mtu <n>, up <0|1>, name <name>, lladdr <addr>,
+broadcast <addr>, multicast <0|1>, arp <0|1>.
 
 (2) After PROC CRTE, only secondary PROC cmds are accepted until finished.
 The parameters are parsed as base64-encoded strings if they start with a '='

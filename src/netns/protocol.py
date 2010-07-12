@@ -6,8 +6,10 @@ try:
     from yaml import CDumper as Dumper
 except ImportError:
     from yaml import Loader, Dumper
-import base64, os, passfd, re, signal, socket, sys, traceback, unshare, yaml
-import netns.subprocess_, netns.iproute
+import base64, os, passfd, re, signal, sys, traceback, unshare, yaml
+import netns.subprocess_, netns.iproute, netns.interface
+
+# FIXME: proper and uniform handling of errors
 
 # ============================================================================
 # Server-side protocol implementation
@@ -25,7 +27,7 @@ _proto_commands = {
         "HELP": { None: ("", "") },
         "IF": {
             "LIST": ("", "i"),
-            "SET":  ("iss", ""),
+            "SET":  ("iss", "s*"),
             "RTRN": ("ii", "")
             },
         "ADDR": {
@@ -356,8 +358,35 @@ class Server(object):
         self.reply(200, ["# Interface data follows."] +
                 yaml.dump(ifdata).split("\n"))
 
-#    def do_IF_SET(self, cmdname, ifnr, key, val):
-#    def do_IF_RTRN(self, cmdname, ifnr, netns):
+    def do_IF_SET(self, cmdname, ifnr, *args):
+        if len(args) % 2:
+            self.reply(500,
+                    "Invalid number of arguments for IF SET: must be even.")
+            return
+        d = {'index': ifnr}
+        for i in range(len(args) / 2):
+            d[str(args[i * 2])] = args[i * 2 + 1]
+
+        try:
+            iface = netns.interface.interface(**d)
+        except:
+            self.reply(500, "Invalid parameters.")
+            return
+
+        try:
+            netns.iproute.set_if(iface)
+        except BaseException, e:
+            self.reply(500, "Error setting interface: %s." % str(e))
+            return
+        self.reply(200, "Done.")
+
+    def do_IF_RTRN(self, cmdname, ifnr, netns):
+        try:
+            netns.iproute.change_netns(ifnr, netns)
+        except BaseException, e:
+            self.reply(500, "Error returning interface: %s." % str(e))
+            return
+        self.reply(200, "Done.")
 
     def do_ADDR_LIST(self, cmdname, ifnr = None):
         addrdata = netns.iproute.get_addr_data()[0]
@@ -369,8 +398,22 @@ class Server(object):
         self.reply(200, ["# Address data follows."] +
                 yaml.dump(addrdata).split("\n"))
 
-#    def do_ADDR_ADD(self, cmdname, ifnr, address, prefixlen, broadcast = None):
-#    def do_ADDR_DEL(self, cmdname, ifnr, address, prefixlen):
+    def do_ADDR_ADD(self, cmdname, ifnr, address, prefixlen, broadcast = None):
+        if address.find(":") < 0: # crude, I know
+            a = netns.interface.ipv4address(address, prefixlen, broadcast)
+        else:
+            a = netns.interface.ipv6address(address, prefixlen)
+        netns.iproute.add_addr(ifnr, a)
+        self.reply(200, "Done.")
+
+    def do_ADDR_DEL(self, cmdname, ifnr, address, prefixlen):
+        if address.find(":") < 0: # crude, I know
+            a = netns.interface.ipv4address(address, prefixlen, None)
+        else:
+            a = netns.interface.ipv6address(address, prefixlen)
+        netns.iproute.del_addr(ifnr, a)
+        self.reply(200, "Done.")
+
 #    def do_ROUT_LIST(self, cmdname):
 #    def do_ROUT_ADD(self, cmdname, prefix, prefixlen, nexthop, ifnr):
 #    def do_ROUT_DEL(self, cmdname, prefix, prefixlen, nexthop, ifnr):
@@ -528,6 +571,21 @@ class Client(object):
         data = data.partition("\n")[2] # ignore first line
         return yaml.load(data)
 
+    def set_if(self, interface):
+        cmd = ["IF", "SET", interface.index]
+        for k in ("name", "mtu", "lladdr", "broadcast", "up", "multicast",
+                "arp"):
+            v = getattr(interface, k)
+            if v != None:
+                cmd += [k, str(v)]
+
+        self._send_cmd(*cmd)
+        self._read_and_check_reply()
+
+    def change_netns(self, ifnr, netns):
+        self._send_cmd("IF", "RTRN", ifnr, netns)
+        self._read_and_check_reply()
+
     def get_addr_data(self, ifnr = None):
         if ifnr:
             self._send_cmd("ADDR", "LIST", ifnr)
@@ -536,6 +594,19 @@ class Client(object):
         data = self._read_and_check_reply()
         data = data.partition("\n")[2] # ignore first line
         return yaml.load(data)
+
+    def add_addr(self, ifnr, address):
+        if hasattr(address, "broadcast") and address.broadcast:
+            self._send_cmd("ADDR", "ADD", ifnr, address.address,
+                    address.prefix_len, address.broadcast)
+        else:
+            self._send_cmd("ADDR", "ADD", ifnr, address.address,
+                    address.prefix_len)
+        self._read_and_check_reply()
+
+    def del_addr(self, ifnr, address):
+        self._send_cmd("ADDR", "DEL", ifnr, address.address, address.prefix_len)
+        self._read_and_check_reply()
 
 def _b64(text):
     text = str(text)
