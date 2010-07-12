@@ -123,26 +123,26 @@ class TestSubprocess(unittest.TestCase):
         self.assertEquals(wait(p), 0)
 
     def test_Subprocess_basic(self):
-        node = netns.Node(nonetns = True)
+        node = netns.Node(nonetns = True, debug = 0)
         # User does not exist
-        self.assertRaises(RuntimeError, Subprocess, node,
+        self.assertRaises(ValueError, Subprocess, node,
                 ['/bin/sleep', '1000'], user = self.nouser)
-        self.assertRaises(RuntimeError, Subprocess, node,
+        self.assertRaises(ValueError, Subprocess, node,
                 ['/bin/sleep', '1000'], user = self.nouid)
         # Invalid CWD: it is a file
-        self.assertRaises(RuntimeError, Subprocess, node,
+        self.assertRaises(OSError, Subprocess, node,
                 '/bin/sleep', cwd = '/bin/sleep')
         # Invalid CWD: does not exist
-        self.assertRaises(RuntimeError, Subprocess, node,
+        self.assertRaises(OSError, Subprocess, node,
                 '/bin/sleep', cwd = self.nofile)
         # Exec failure
-        self.assertRaises(RuntimeError, Subprocess, node, self.nofile)
+        self.assertRaises(OSError, Subprocess, node, self.nofile)
         # Test that the environment is cleared: sleep should not be found
-        self.assertRaises(RuntimeError, Subprocess, node,
+        self.assertRaises(OSError, Subprocess, node,
                 'sleep', env = {'PATH': ''})
 
         # Argv
-        self.assertRaises(RuntimeError, Subprocess, node, 'true; false')
+        self.assertRaises(OSError, Subprocess, node, 'true; false')
         self.assertEquals(Subprocess(node, 'true').wait(), 0)
         self.assertEquals(Subprocess(node, 'true; false', shell = True).wait(),
                 1)

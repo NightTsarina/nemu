@@ -9,8 +9,6 @@ except ImportError:
 import base64, os, passfd, re, signal, sys, traceback, unshare, yaml
 import netns.subprocess_, netns.iproute, netns.interface
 
-# FIXME: proper and uniform handling of errors
-
 # ============================================================================
 # Server-side protocol implementation
 #
@@ -220,7 +218,13 @@ class Server(object):
             cmd = self.readcmd()
             if cmd == None:
                 continue
-            cmd[0](cmd[1], *cmd[2])
+            try:
+                cmd[0](cmd[1], *cmd[2])
+            except:
+                (t, v, tb) = sys.exc_info()
+                v.child_traceback = "".join(
+                        traceback.format_exception(t, v, tb))
+                self.reply(550, yaml.dump(v))
         try:
             self._rfd.close()
             self._wfd.close()
@@ -291,28 +295,20 @@ class Server(object):
     do_PROC_SOUT = do_PROC_SERR = do_PROC_SIN
 
     def do_PROC_RUN(self, cmdname):
-        try:
-            self._proc['close_fds'] = True # forced
-            chld = netns.subprocess_.spawn(**self._proc)
-        except:
-            (t, v, tb) = sys.exc_info()
-            r = ["Failure starting process: %s" % str(v)]
-            if self.debug:
-                r += traceback.format_exception(t, v, tb)
-            self.reply(500, r)
-            self._proc = None
-            self.commands = _proto_commands
-            return
-
-        self._children.add(chld)
+        params = self._proc
+        params['close_fds'] = True # forced
+        self._proc = None
         self.commands = _proto_commands
 
-        # I can close the fds now
-        for d in ('stdin', 'stdout', 'stderr'):
-            if d in self._proc:
-                os.close(self._proc[d])
+        try:
+            chld = netns.subprocess_.spawn(**params)
+        finally:
+            # I can close the fds now
+            for d in ('stdin', 'stdout', 'stderr'):
+                if d in params:
+                    os.close(params[d])
 
-        self._proc = None
+        self._children.add(chld)
         self.reply(200, "%d running." % chld)
 
     def do_PROC_ABRT(self, cmdname):
@@ -351,9 +347,6 @@ class Server(object):
     def do_IF_LIST(self, cmdname, ifnr = None):
         ifdata = netns.iproute.get_if_data()[0]
         if ifnr != None:
-            if ifnr not in ifdata:
-                self.reply(500, "Interface not found.")
-                return
             ifdata = ifdata[ifnr]
         self.reply(200, ["# Interface data follows."] +
                 yaml.dump(ifdata).split("\n"))
@@ -367,33 +360,17 @@ class Server(object):
         for i in range(len(args) / 2):
             d[str(args[i * 2])] = args[i * 2 + 1]
 
-        try:
-            iface = netns.interface.interface(**d)
-        except:
-            self.reply(500, "Invalid parameters.")
-            return
-
-        try:
-            netns.iproute.set_if(iface)
-        except BaseException, e:
-            self.reply(500, "Error setting interface: %s." % str(e))
-            return
+        iface = netns.interface.interface(**d)
+        netns.iproute.set_if(iface)
         self.reply(200, "Done.")
 
     def do_IF_RTRN(self, cmdname, ifnr, netns):
-        try:
-            netns.iproute.change_netns(ifnr, netns)
-        except BaseException, e:
-            self.reply(500, "Error returning interface: %s." % str(e))
-            return
+        netns.iproute.change_netns(ifnr, netns)
         self.reply(200, "Done.")
 
     def do_ADDR_LIST(self, cmdname, ifnr = None):
         addrdata = netns.iproute.get_addr_data()[0]
         if ifnr != None:
-            if ifnr not in addrdata:
-                self.reply(500, "Interface not found.")
-                return
             addrdata = addrdata[ifnr]
         self.reply(200, ["# Address data follows."] +
                 yaml.dump(addrdata).split("\n"))
@@ -458,6 +435,9 @@ class Client(object):
         code is not the expected value. If expected is not specified, it
         defaults to 2."""
         code, text = self._read_reply()
+        if code == 550: # exception
+            e = yaml.load(text)
+            raise e
         if code / 100 != expected:
             # FIXME: shuld try to save and re-create exceptions
             raise RuntimeError("Error from slave: %d %s" % (code, text))
@@ -610,8 +590,8 @@ class Client(object):
 
 def _b64(text):
     text = str(text)
-    if filter(lambda x: ord(x) <= ord(" ") or ord(x) > ord("z")
-            or x == "=", text):
+    if len(text) == 0 or filter(lambda x: ord(x) <= ord(" ") or
+            ord(x) > ord("z") or x == "=", text):
         return "=" + base64.b64encode(text)
     else:
         return text
