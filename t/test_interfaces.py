@@ -6,7 +6,7 @@ import netns, test_util
 import os
 import unittest
 
-class TestInterfaces(unittest.TestCase):
+class TestUtils(unittest.TestCase):
     def test_utils(self):
         devs = get_devs()
         # There should be at least loopback!
@@ -19,6 +19,7 @@ class TestInterfaces(unittest.TestCase):
             'bcast': None, 'family': 'inet'
             } in devs['lo']['addr'])
 
+class TestInterfaces(unittest.TestCase):
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_interface_creation(self):
         node0 = netns.Node()
