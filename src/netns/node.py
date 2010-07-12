@@ -2,7 +2,7 @@
 # vim:ts=4:sw=4:et:ai:sts=4
 
 import os, socket, sys, traceback, unshare, weakref
-import netns.protocol
+import netns.protocol, netns.subprocess_
 
 class Node(object):
     _nodes = weakref.WeakValueDictionary()
@@ -37,11 +37,25 @@ class Node(object):
         self._slave.shutdown()
         del self._slave
 
+    # Subprocesses
     def _add_subprocess(self, subprocess):
         self._processes[subprocess.pid] = subprocess
+
+    def Subprocess(self, *kargs, **kwargs):
+        return netns.subprocess_.Subprocess(self, *kargs, **kwargs)
+    def Popen(self, *kargs, **kwargs):
+        return netns.subprocess_.Popen(self, *kargs, **kwargs)
+    def system(self, *kargs, **kwargs):
+        return netns.subprocess_.system(self, *kargs, **kwargs)
+    def backticks(self, *kargs, **kwargs):
+        return netns.subprocess_.backticks(self, *kargs, **kwargs)
+    def backticks_raise(self, *kargs, **kwargs):
+        return netns.subprocess_.backticks_raise(self, *kargs, **kwargs)
+
     @property
     def pid(self):
         return self._pid
+
     def add_if(self, mac_address = None, mtu = None):
         return Interface(mac_address, mtu)
     def add_route(self, prefix, prefix_len, nexthop = None, interface = None):

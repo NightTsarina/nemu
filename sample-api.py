@@ -78,19 +78,14 @@ stats = link0.get_stats()
 # IDEA: implement Node.popen and build the others upon it.
 # IDEA: use SCM_RIGHTS to pass filedescriptors instead of using pipes/sockets
 
-# Run a process in background, associate its stdio to three named pipes
-app0 = a.start_process("ping -c 3 10.0.0.2")
-print "ping command PIPES at (%s, %s, %s)" % app0.pipes
-app0.kill(15)
-
-# The same, but directly as python file objects
-app1 = a.start_process(["ping", "-c", "3", "10.0.0.2"])
-buf = app1.stdout.read()
-app1.wait()
+# Run a process in background
+import subprocess
+app0 = a.Popen("ping -c 3 10.0.0.2", shell = True, stdout = subprocess.PIPE)
+print app0.stdout.readline()
+app0.wait()
 
 # Run, capture output and wait()
-(stdout, stderr) = a.run_process(["ping", "-c", "3", "10.0.0.2"])
-# stdout, stderr are strings
+stdout = a.backticks(["ping", "-c", "3", "10.0.0.2"])
 
 # Run an process with a pseudo-tty associated to it; provide a UNIX socket to
 # interact with the process
