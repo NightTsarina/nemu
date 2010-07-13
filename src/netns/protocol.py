@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 # vim:ts=4:sw=4:et:ai:sts=4
 
-try:
+try: # pragma: no cover
     from yaml import CLoader as Loader
     from yaml import CDumper as Dumper
 except ImportError:
     from yaml import Loader, Dumper
+
 import base64, os, passfd, re, signal, sys, traceback, unshare, yaml
 import netns.subprocess_, netns.iproute, netns.interface
 
@@ -91,12 +92,12 @@ class Server(object):
         for i in range(len(clean) - 1):
             s = str(code) + "-" + clean[i] + "\n"
             self._wfd.write(s)
-            if self.debug:
+            if self.debug: # pragma: no cover
                 sys.stderr.write("<ans> %s" % s)
 
         s = str(code) + " " + clean[-1] + "\n"
         self._wfd.write(s)
-        if self.debug:
+        if self.debug: # pragma: no cover
             sys.stderr.write("<ans> %s" % s)
         return
 
@@ -106,27 +107,9 @@ class Server(object):
         if not line:
             self.closed = True
             return None
-        if self.debug:
+        if self.debug: # pragma: no cover
             sys.stderr.write("<C> %s" % line)
         return line.rstrip()
-
-    def readchunk(self, size):
-        "Read a chunk of data limited by size or by an empty line."
-        read = 0
-        res = ""
-
-        while True:
-            line = self._rfd.readline()
-            if not line:
-                self.closed = True
-                return None
-            if size == None and line == "\n":
-                break
-            read += len(line)
-            res += line
-            if size != None and read >= size:
-                break
-        return res
 
     def readcmd(self):
         """Main entry point: read and parse a line from the client, handle
@@ -165,7 +148,7 @@ class Server(object):
             cmdname = cmd1
             funcname = "do_%s" % cmd1
 
-        if not hasattr(self, funcname):
+        if not hasattr(self, funcname): # pragma: no cover
             self.reply(500, "Not implemented.")
             return None
 
@@ -181,7 +164,6 @@ class Server(object):
         for i in range(len(args)):
             if argstemplate[j] == '*':
                 j = j - 1
-
             if argstemplate[j] == 'i':
                 try:
                     args[i] = int(args[i])
@@ -189,24 +171,20 @@ class Server(object):
                     self.reply(500, "Invalid parameter %s: must be an integer."
                             % args[i])
                     return None
-            elif argstemplate[j] == 's':
-                pass
             elif argstemplate[j] == 'b':
                 try:
                     if args[i][0] == '=':
                         args[i] = base64.b64decode(args[i][1:])
-#                    if len(args[i]) == 0:
-#                        self.reply(500, "Invalid parameter: empty.")
-#                        return None
                 except TypeError:
                     self.reply(500, "Invalid parameter: not base-64 encoded.")
                     return None
-            else:
+            elif argstemplate[j] != 's': # pragma: no cover
                 raise RuntimeError("Invalid argument template: %s" % _argstmpl)
+            # Nothing done for "s" parameters
             j += 1
 
         func = getattr(self, funcname)
-        if self.debug:
+        if self.debug: # pragma: no cover
             sys.stderr.write("<cmd> %s, args: %s\n" % (cmdname, args))
         return (func, cmdname, args)
 
@@ -276,7 +254,6 @@ class Server(object):
         self.reply(354,
                 "Pass the file descriptor now, with `%s\\n' as payload." %
                 cmdname)
-
         try:
             fd, payload = passfd.recvfd(self._rfd, len(cmdname) + 1)
         except (IOError, BaseException), e: # FIXME

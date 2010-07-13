@@ -155,6 +155,14 @@ class TestSubprocess(unittest.TestCase):
         os.close(r)
         p.wait()
 
+        # cwd
+        r, w = os.pipe()
+        p = Subprocess(node, '/bin/pwd', stdout = w, cwd = "/")
+        os.close(w)
+        self.assertEquals(_readall(r), "/\n")
+        os.close(r)
+        p.wait()
+
         p = Subprocess(node, ['sleep', '100'])
         self.assertTrue(p.pid > 0)
         self.assertEquals(p.poll(), None) # not finished

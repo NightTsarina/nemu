@@ -2,7 +2,7 @@
 # vim:ts=4:sw=4:et:ai:sts=4
 
 import netns.protocol
-import os, socket, sys, unittest
+import os, socket, sys, threading, unittest
 
 class TestServer(unittest.TestCase):
     def test_server_startup(self):
@@ -10,40 +10,36 @@ class TestServer(unittest.TestCase):
         # the file descriptor; and check the banner.
         (s0, s1) = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM, 0)
         (s2, s3) = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM, 0)
-        pid = os.fork()
-        if not pid:
-            s1.close()
+
+        def run_server():
             srv = netns.protocol.Server(s0, s0)
             srv.run()
 
-            s3.close()
             srv = netns.protocol.Server(s2.fileno(), s2.fileno())
             srv.run()
+        t = threading.Thread(target = run_server)
+        t.start()
 
-            os._exit(0)
-
-        s0.close()
         s = os.fdopen(s1.fileno(), "r+", 1)
         self.assertEquals(s.readline()[0:4], "220 ")
         s.close()
+        s0.close()
 
-        s2.close()
         s = os.fdopen(s3.fileno(), "r+", 1)
         self.assertEquals(s.readline()[0:4], "220 ")
         s.close()
-        pid, ret = os.waitpid(pid, 0)
-        self.assertEquals(ret, 0)
+        s2.close()
+        t.join()
 
     def test_spawn_recovery(self):
         (s0, s1) = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM, 0)
-        pid = os.fork()
-        if not pid:
-            s1.close()
-            srv = netns.protocol.Server(s0, s0)
-            srv.run()
-            os._exit(0)
+
+        def run_server():
+            netns.protocol.Server(s0, s0, debug = 0).run()
+        t = threading.Thread(target = run_server)
+        t.start()
+
         cli = netns.protocol.Client(s1, s1)
-        s0.close()
 
         # make PROC SIN fail
         self.assertRaises(OSError, cli.spawn, "/bin/true", stdin = -1)
@@ -51,13 +47,17 @@ class TestServer(unittest.TestCase):
         # PROC CWD should not be valid
         cli._send_cmd("PROC", "CWD", "/")
         self.assertRaises(RuntimeError, cli._read_and_check_reply)
+
+        # Force a KeyError, and check that the exception is received correctly
+        cli._send_cmd("IF", "LIST", "-1")
+        self.assertRaises(KeyError, cli._read_and_check_reply)
         cli.shutdown()
-        pid, ret = os.waitpid(pid, 0)
-        self.assertEquals(ret, 0)
+
+        t.join()
 
     def test_basic_stuff(self):
         (s0, s1) = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM, 0)
-        srv = netns.protocol.Server(s0, s0)
+        srv = netns.protocol.Server(s0, s0, debug = 0)
         s1 = s1.makefile("r+", 1)
 
         def check_error(self, cmd, code = 500):
@@ -93,6 +93,9 @@ class TestServer(unittest.TestCase):
         check_error(self, "proc poll") # missing arg
         check_error(self, "proc poll 1 2") # too many args
         check_error(self, "proc poll a") # invalid type
+        check_error(self, "proc") # incomplete command
+        check_error(self, "proc foo") # unknown subcommand
+        check_error(self, "foo bar") # unknown
 
         check_ok(self, "proc crte /bin/sh", srv.do_PROC_CRTE,
                 ['/bin/sh'])
