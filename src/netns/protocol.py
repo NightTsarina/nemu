@@ -27,7 +27,7 @@ _proto_commands = {
         "IF": {
             "LIST": ("", "i"),
             "SET":  ("iss", "s*"),
-            "RTRN": ("ii", "")
+            "RTRN": ("ii", ""),
             "DEL":  ("i", "")
             },
         "ADDR": {
