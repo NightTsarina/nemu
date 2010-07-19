@@ -64,7 +64,7 @@ def create_if_pair(if1, if2):
             cmd[i] += ["mtu", str(iface[i].mtu)]
 
     cmd = ["ip", "link", "add"] + cmd[0] + ["type", "veth", "peer"] + cmd[1]
-    execute(cmd)
+    _execute(cmd)
     try:
         set_if(if1)
         set_if(if2)
@@ -81,7 +81,7 @@ def create_if_pair(if1, if2):
 
 def del_if(iface):
     ifname = get_if_name(iface)
-    execute(["ip", "link", "del", ifname])
+    _execute(["ip", "link", "del", ifname])
 
 def set_if(iface, recover = True):
     orig_iface = get_real_if(iface)
@@ -106,7 +106,7 @@ def set_if(iface, recover = True):
     #print cmds
     for c in cmds:
         try:
-            execute(c)
+            _execute(c)
         except:
             if recover:
                 set_if(orig_iface, recover = False) # rollback
@@ -114,7 +114,7 @@ def set_if(iface, recover = True):
 
 def change_netns(iface, netns):
     ifname = get_if_name(iface)
-    execute(["ip", "link", "set", "dev", ifname, "netns", str(netns)])
+    _execute(["ip", "link", "set", "dev", ifname, "netns", str(netns)])
 
 def add_addr(iface, address):
     ifname = get_if_name(iface)
@@ -125,7 +125,7 @@ def add_addr(iface, address):
             "%s/%d" % (address.address, int(address.prefix_len))]
     if hasattr(address, "broadcast"):
         cmd += ["broadcast", address.broadcast if address.broadcast else "+"]
-    execute(cmd)
+    _execute(cmd)
 
 def del_addr(iface, address):
     ifname = get_if_name(iface)
@@ -134,7 +134,7 @@ def del_addr(iface, address):
 
     cmd = ["ip", "addr", "del", "dev", ifname, "local",
             "%s/%d" % (address.address, int(address.prefix_len))]
-    execute(cmd)
+    _execute(cmd)
 
 def set_addr(iface, addresses, recover = True):
     ifname = get_if_name(iface)
@@ -160,7 +160,7 @@ def set_addr(iface, addresses, recover = True):
 
 # Useful stuff
 
-def execute(cmd):
+def _execute(cmd):
     print " ".join(cmd)#; return
     null = open('/dev/null', 'r+')
     p = subprocess.Popen(cmd, stdout = null, stderr = subprocess.PIPE)
@@ -182,7 +182,7 @@ def get_real_if(iface):
 def get_if_name(iface):
     if isinstance(iface, netns.interface.interface):
         if iface.name != None:
-            return iface
+            return iface.name
     if isinstance(iface, str):
         return iface
     return get_real_if(iface).name
