@@ -28,6 +28,7 @@ _proto_commands = {
             "LIST": ("", "i"),
             "SET":  ("iss", "s*"),
             "RTRN": ("ii", "")
+            "DEL":  ("i", "")
             },
         "ADDR": {
             "LIST": ("", "i"),
@@ -345,6 +346,10 @@ class Server(object):
         netns.iproute.change_netns(ifnr, netns)
         self.reply(200, "Done.")
 
+    def do_IF_DEL(self, cmdname, ifnr):
+        netns.iproute.del_if(ifnr)
+        self.reply(200, "Done.")
+
     def do_ADDR_LIST(self, cmdname, ifnr = None):
         addrdata = netns.iproute.get_addr_data()[0]
         if ifnr != None:
@@ -537,6 +542,10 @@ class Client(object):
                 cmd += [k, str(v)]
 
         self._send_cmd(*cmd)
+        self._read_and_check_reply()
+
+    def del_if(self, ifnr):
+        self._send_cmd("IF", "DEL", ifnr)
         self._read_and_check_reply()
 
     def change_netns(self, ifnr, netns):
