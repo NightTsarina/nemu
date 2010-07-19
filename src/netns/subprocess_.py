@@ -1,12 +1,14 @@
 #!/usr/bin/env python
 # vim:ts=4:sw=4:et:ai:sts=4
 
-import fcntl, grp, os, pickle, pwd, signal, select, sys, traceback
+import fcntl, grp, os, pickle, pwd, signal, select, sys, time, traceback
 
 __all__ = [ 'PIPE', 'STDOUT', 'Popen', 'Subprocess', 'spawn', 'wait', 'poll',
         'system', 'backticks', 'backticks_raise' ]
 
 # User-facing interfaces
+
+KILL_WAIT = 3 # seconds
 
 class Subprocess(object):
     """Class that allows the execution of programs inside a netns Node. This is
@@ -101,10 +103,21 @@ class Subprocess(object):
             return os.WEXITSTATUS(self._returncode)
         raise RuntimeError("Invalid return code") # pragma: no cover
 
-    # FIXME: do we have any other way to deal with this than having explicit
-    # destroy?
+    def __del__(self):
+        self.destroy()
     def destroy(self):
-        pass
+        if self._returncode != None:
+            return
+        self.signal()
+        now = time.time()
+        while time.time() - now < KILL_WAIT:
+            if self.poll():
+                return
+            time.sleep(0.1)
+        sys.stderr.write("WARNING: killing forcefully process %d.\n" %
+                self._pid)
+        self.signal(signal.KILL)
+        self.wait()
 
 PIPE = -1
 STDOUT = -2

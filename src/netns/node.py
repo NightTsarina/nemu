@@ -27,9 +27,9 @@ class Node(object):
         Node._nextnode += 1
 
     def __del__(self):
-        self.shutdown()
+        self.destroy()
 
-    def shutdown(self):
+    def destroy(self):
         for p in self._processes.values():
             p.destroy()
         del self._processes
