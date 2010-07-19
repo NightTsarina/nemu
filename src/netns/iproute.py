@@ -90,18 +90,24 @@ def set_if(iface, recover = True):
     cmds = []
     if diff.name:
         cmds.append(_ils + ["name", diff.name])
-    if diff.mtu:
-        cmds.append(_ils + ["mtu", str(diff.mtu)])
     if diff.lladdr:
         cmds.append(_ils + ["address", diff.lladdr])
+    if diff.mtu:
+        cmds.append(_ils + ["mtu", str(diff.mtu)])
     if diff.broadcast:
         cmds.append(_ils + ["broadcast", diff.broadcast])
-    if diff.up != None:
-        cmds.append(_ils + ["up" if diff.up else "down"])
     if diff.multicast != None:
         cmds.append(_ils + ["multicast", "on" if diff.multicast else "off"])
     if diff.arp != None:
         cmds.append(_ils + ["arp", "on" if diff.arp else "off"])
+    if diff.up != None:
+        cmds.append(_ils + ["up" if diff.up else "down"])
+    
+    # iface needs to be down before changing name or address
+    if (diff.name or diff.lladdr) and orig_iface.up:
+        cmds.insert(0, _ils + ["down"])
+        if diff.up == None: # if it was not set already
+            cmds.append(_ils + ["up"])
 
     #print cmds
     for c in cmds:
