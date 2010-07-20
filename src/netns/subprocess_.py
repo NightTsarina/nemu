@@ -55,6 +55,10 @@ class Subprocess(object):
             argv = [ argv ]
         if shell:
             argv = [ '/bin/sh', '-c' ] + argv
+        
+        # Initialize attributes that would be used by the destructor if spawn
+        # fails
+        self._pid = self._returncode = None
         # confusingly enough, to go to the function at the top of this file,
         # I need to call it thru the communications protocol: remember that
         # happens in another process!
@@ -63,7 +67,6 @@ class Subprocess(object):
                 cwd = cwd, env = env, user = user)
 
         node._add_subprocess(self)
-        self._returncode = None
 
     @property
     def pid(self):
@@ -106,17 +109,17 @@ class Subprocess(object):
     def __del__(self):
         self.destroy()
     def destroy(self):
-        if self._returncode != None:
+        if self._returncode != None or self._pid == None:
             return
         self.signal()
         now = time.time()
         while time.time() - now < KILL_WAIT:
-            if self.poll():
+            if self.poll() != None:
                 return
             time.sleep(0.1)
         sys.stderr.write("WARNING: killing forcefully process %d.\n" %
                 self._pid)
-        self.signal(signal.KILL)
+        self.signal(signal.SIGKILL)
         self.wait()
 
 PIPE = -1
@@ -137,6 +140,7 @@ class Popen(Subprocess):
         """
 
         self.stdin = self.stdout = self.stderr = None
+        self._pid = self._returncode = None
         fdmap = { "stdin": stdin, "stdout": stdout, "stderr": stderr }
         # if PIPE: all should be closed at the end
         for k, v in fdmap.items():
