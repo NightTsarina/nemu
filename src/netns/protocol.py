@@ -535,8 +535,7 @@ class Client(object):
 
     def set_if(self, interface):
         cmd = ["IF", "SET", interface.index]
-        for k in ("name", "mtu", "lladdr", "broadcast", "up", "multicast",
-                "arp"):
+        for k in interface.changeable_attributes:
             v = getattr(interface, k)
             if v != None:
                 cmd += [k, str(v)]

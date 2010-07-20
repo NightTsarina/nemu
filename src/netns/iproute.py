@@ -27,6 +27,17 @@ def get_if_data():
         byidx[idx] = bynam[i.name] = i
     return byidx, bynam
 
+def get_if(iface):
+    ifdata = get_if_data()
+    if isinstance(iface, netns.interface.interface):
+        if iface.index != None:
+            return ifdata[0][iface.index]
+        else:
+            return ifdata[1][iface.name]
+    if isinstance(iface, int):
+        return ifdata[0][iface]
+    return ifdata[1][iface]
+
 def get_addr_data():
     ipcmd = subprocess.Popen(["ip", "-o", "addr", "list"],
         stdout = subprocess.PIPE)
@@ -80,11 +91,11 @@ def create_if_pair(if1, if2):
     return interfaces[if1.name], interfaces[if2.name]
 
 def del_if(iface):
-    ifname = get_if_name(iface)
+    ifname = _get_if_name(iface)
     _execute(["ip", "link", "del", ifname])
 
 def set_if(iface, recover = True):
-    orig_iface = get_real_if(iface)
+    orig_iface = get_if(iface)
     _ils = ["ip", "link", "set", "dev", orig_iface.name]
     diff = iface - orig_iface # Only set what's needed
     cmds = []
@@ -119,11 +130,11 @@ def set_if(iface, recover = True):
                 raise
 
 def change_netns(iface, netns):
-    ifname = get_if_name(iface)
+    ifname = _get_if_name(iface)
     _execute(["ip", "link", "set", "dev", ifname, "netns", str(netns)])
 
 def add_addr(iface, address):
-    ifname = get_if_name(iface)
+    ifname = _get_if_name(iface)
     addresses = get_addr_data()[1][ifname]
     assert address not in addresses
 
@@ -134,7 +145,7 @@ def add_addr(iface, address):
     _execute(cmd)
 
 def del_addr(iface, address):
-    ifname = get_if_name(iface)
+    ifname = _get_if_name(iface)
     addresses = get_addr_data()[1][ifname]
     assert address in addresses
 
@@ -143,7 +154,7 @@ def del_addr(iface, address):
     _execute(cmd)
 
 def set_addr(iface, addresses, recover = True):
-    ifname = get_if_name(iface)
+    ifname = _get_if_name(iface)
     addresses = get_addr_data()[1][ifname]
     to_remove = set(orig_addresses) - set(addresses)
     to_add = set(addresses) - set(orig_addresses)
@@ -174,21 +185,10 @@ def _execute(cmd):
     if p.returncode != 0:
         raise RuntimeError("Error executing `%s': %s" % (" ".join(cmd), err))
 
-def get_real_if(iface):
-    ifdata = get_if_data()
-    if isinstance(iface, netns.interface.interface):
-        if iface.index != None:
-            return ifdata[0][iface.index]
-        else:
-            return ifdata[1][iface.name]
-    if isinstance(iface, int):
-        return ifdata[0][iface]
-    return ifdata[1][iface]
-
-def get_if_name(iface):
+def _get_if_name(iface):
     if isinstance(iface, netns.interface.interface):
         if iface.name != None:
             return iface.name
     if isinstance(iface, str):
         return iface
-    return get_real_if(iface).name
+    return get_if(iface).name
