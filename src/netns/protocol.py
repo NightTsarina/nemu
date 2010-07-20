@@ -323,9 +323,10 @@ class Server(object):
         self.reply(200, "Process signalled.")
 
     def do_IF_LIST(self, cmdname, ifnr = None):
-        ifdata = netns.iproute.get_if_data()[0]
-        if ifnr != None:
-            ifdata = ifdata[ifnr]
+        if ifnr == None:
+            ifdata = netns.iproute.get_if_data()[0]
+        else:
+            ifdata = netns.iproute.get_if(ifnr)
         self.reply(200, ["# Interface data follows."] +
                 yaml.dump(ifdata).split("\n"))
 
