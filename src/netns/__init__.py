@@ -2,7 +2,8 @@
 # vim:ts=4:sw=4:et:ai:sts=4
 
 import os, pwd
-from netns.node import Node
+from netns.node import *
+from netns.interface import *
 
 class __Config(object):
     def __init__(self):
@@ -37,7 +38,7 @@ class __Config(object):
             "Default user to run applications as")
 
 config = __Config()
-get_nodes = Node.get_nodes
+
 
 # FIXME: set atfork hooks
 # http://code.google.com/p/python-atfork/source/browse/atfork/__init__.py

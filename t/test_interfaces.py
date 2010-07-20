@@ -34,20 +34,20 @@ class TestInterfaces(unittest.TestCase):
 
         devs = get_devs()
         for i in range(5):
-            self.assertTrue(ifaces[i].peer_name in devs)
+            peer_name = netns.iproute.get_if(ifaces[i].control_index).name
+            self.assertTrue(peer_name in devs)
 
         self.assertEquals(set(ifaces), node0.get_interfaces())
 
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_interface_settings(self):
         node0 = netns.Node()
-        if0 = node0.add_if(mac_address = '42:71:e0:90:ca:42', mtu = 1492)
-        self.assertEquals(if0.mac_address, '42:71:e0:90:ca:42')
-        if0.mac_address = '4271E090CA42'
-        self.assertEquals(if0.mac_address, '42:71:e0:90:ca:42')
-        self.assertRaises(BaseException, setattr, if0, 'mac_address', 'foo')
-        self.assertRaises(BaseException, setattr, if0, 'mac_address',
-                '12345678901')
+        if0 = node0.add_if(lladdr = '42:71:e0:90:ca:42', mtu = 1492)
+        self.assertEquals(if0.lladdr, '42:71:e0:90:ca:42')
+        if0.lladdr = '4271E090CA42'
+        self.assertEquals(if0.lladdr, '42:71:e0:90:ca:42')
+        self.assertRaises(BaseException, setattr, if0, 'lladdr', 'foo')
+        self.assertRaises(BaseException, setattr, if0, 'lladdr', '12345678901')
         self.assertEquals(if0.mtu, 1492)
         self.assertRaises(BaseException, setattr, if0, 'mtu', 0)
         self.assertRaises(BaseException, setattr, if0, 'mtu', 65537)
@@ -55,7 +55,7 @@ class TestInterfaces(unittest.TestCase):
         devs = get_devs_netns(node0)
         self.assertTrue(if0.name in devs)
         self.assertFalse(devs[if0.name]['up'])
-        self.assertEquals(devs[if0.name]['lladdr'], if0.mac_address)
+        self.assertEquals(devs[if0.name]['lladdr'], if0.lladdr)
         self.assertEquals(devs[if0.name]['mtu'], if0.mtu)
 
         if0.enable = True
@@ -70,7 +70,8 @@ class TestInterfaces(unittest.TestCase):
 
         # FIXME: get_stats
 
-    @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
+    #@test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
+    @test_util.skip("Not implemented")
     def test_interface_migration(self):
         node0 = netns.Node()
         dummyname = "dummy%d" % os.getpid()
@@ -80,12 +81,12 @@ class TestInterfaces(unittest.TestCase):
         self.assertTrue(dummyname in devs)
 
         if0 = node0.import_if(dummyname)
-        if0.mac_address = '42:71:e0:90:ca:43'
+        if0.lladdr = '42:71:e0:90:ca:43'
         if0.mtu = 1400
 
         devs = get_devs_netns(node0)
         self.assertTrue(if0.name in devs)
-        self.assertEquals(devs[if0.name]['lladdr'], if0.mac_address)
+        self.assertEquals(devs[if0.name]['lladdr'], if0.lladdr)
         self.assertEquals(devs[if0.name]['mtu'], if0.mtu)
 
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")

@@ -19,9 +19,13 @@ b = netns.Node()
 print "Nodes started with pids: %d and %d" % (a.pid, b.pid)
 
 # interface object maps to a veth pair with one end in a netns
-# XXX: should it be named lladdr instead?
-if0 = a.add_if(mac_address = '42:71:e0:90:ca:42')
+if0 = a.add_if(lladdr = '42:71:e0:90:ca:42')
+# This is equivalent
+#if0 = netns.NodeInterface(a)
+#if0.lladdr = '42:71:e0:90:ca:42'
+
 if1 = b.add_if(mtu = 1492)
+
 # for using with a tun device, to connect to the outside world
 if2 = b.import_if('tun0')
 
@@ -37,7 +41,6 @@ link0 = netns.Link(bandwidth = 100 * 1024 * 1024,
 # connect to the bridge
 link0.connect(if0)
 link0.connect(if1)
-#link0.connect(if2)
 
 # Should be experimented with Tom Geoff's patch to see if the bridge could be
 # avoided; but for that the API would be slightly different, as these would be
@@ -45,13 +48,17 @@ link0.connect(if1)
 # ppp0 = netns.PPPLink(a, b, bandwidth = ....)
 # if0 = ppp0.interface(a)
 
+# For now, we have simple P2P interfaces:
+(pppa, pppb) = netns.P2PInterface(a, b)
+
 # Add and connect a tap device (as if a external router were plugged into a
 # switch)
-link0.add_tunnel_if()
+if2 = netns.ExternalInterface('tap0')
+link0.connect(if2)
 
-link0.enabled = True
-if0.enabled = True
-if1.enabled = True
+link0.up = True
+if0.up = True
+if1.up = True
 
 # addresses as iproute
 if0.add_v4_address(addr = '10.0.0.1', prefix_len = 24)
@@ -74,9 +81,6 @@ ifaces = a.get_interfaces()
 nodes = netns.get_nodes()
 links = netns.get_links()
 stats = link0.get_stats()
-
-# IDEA: implement Node.popen and build the others upon it.
-# IDEA: use SCM_RIGHTS to pass filedescriptors instead of using pipes/sockets
 
 # Run a process in background
 import subprocess
