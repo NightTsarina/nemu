@@ -73,6 +73,6 @@ def _bannerwrap(f, text):
 def skip(text):
     return lambda f: _bannerwrap(f, text)
 def skipUnless(cond, text):
-    return lambda f: _bannerwrap(f, text) if not cond else lambda f: f
+    return (lambda f: _bannerwrap(f, text)) if not cond else lambda f: f
 def skipIf(cond, text):
-    return lambda f: _bannerwrap(f, text) if cond else lambda f: f
+    return (lambda f: _bannerwrap(f, text)) if cond else lambda f: f
