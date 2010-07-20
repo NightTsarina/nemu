@@ -63,13 +63,16 @@ def get_devs_netns(node):
     return process_ipcmd(out)
 
 # Unittest from Python 2.6 doesn't have these decorators
-def skip(text):
-    def banner(f):
-        sys.stderr.write("*** WARNING: Skipping test %s (%s): `%s'\n" %
-                (f.__name__, f.__module__, text))
+def _bannerwrap(f, text):
+    name = f.__name__
+    def banner(*args, **kwargs):
+        sys.stderr.write("*** WARNING: Skipping test %s: `%s'\n" %
+                (name, text))
         return None
     return banner
+def skip(text):
+    return lambda f: _bannerwrap(f, text)
 def skipUnless(cond, text):
-    return skip(text) if not cond else lambda f: f
+    return lambda f: _bannerwrap(f, text) if not cond else lambda f: f
 def skipIf(cond, text):
-    return skip(text) if cond else lambda f: f
+    return lambda f: _bannerwrap(f, text) if cond else lambda f: f
