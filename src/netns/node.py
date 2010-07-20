@@ -4,13 +4,15 @@
 import os, socket, sys, traceback, unshare, weakref
 import netns.protocol, netns.subprocess_
 
+__all__ = ['Node', 'get_nodes']
+
 class Node(object):
     _nodes = weakref.WeakValueDictionary()
     _nextnode = 0
-    @classmethod
-    def get_nodes(cls):
+    @staticmethod
+    def get_nodes():
         s = sorted(Node._nodes.items(), key = lambda x: x[0])
-        return [ x[1] for x in s ]
+        return [x[1] for x in s]
 
     def __init__(self, debug = False, nonetns = False):
         """Create a new node in the emulation. Implemented as a separate
@@ -23,6 +25,8 @@ class Node(object):
         self._pid = pid
         self._slave = netns.protocol.Client(fd, fd, debug)
         self._processes = weakref.WeakValueDictionary()
+        self._interfaces = weakref.WeakValueDictionary()
+
         Node._nodes[Node._nextnode] = self
         Node._nextnode += 1
 
@@ -33,9 +37,16 @@ class Node(object):
         for p in self._processes.values():
             p.destroy()
         del self._processes
+        for i in self._interfaces.values():
+            i.destroy()
+        del self._interfaces
         del self._pid
         self._slave.shutdown()
         del self._slave
+
+    @property
+    def pid(self):
+        return self._pid
 
     # Subprocesses
     def _add_subprocess(self, subprocess):
@@ -52,29 +63,26 @@ class Node(object):
     def backticks_raise(self, *kargs, **kwargs):
         return netns.subprocess_.backticks_raise(self, *kargs, **kwargs)
 
-    @property
-    def pid(self):
-        return self._pid
+    # Interfaces
+    def _add_interface(self, interface):
+        self._interfaces[interface.index] = interface
 
-    def add_if(self, mac_address = None, mtu = None):
-        return Interface(mac_address, mtu)
+    def add_if(self, **kwargs):
+        i = netns.interface.NodeInterface(self)
+        for k, v in kwargs.items():
+            setattr(i, k, v)
+        return i
+    def get_interfaces(self):
+        # FIXME: loopback et al
+        s = sorted(self._interfaces.items(), key = lambda x: x[0])
+        return [x[1] for x in s]
+
     def add_route(self, prefix, prefix_len, nexthop = None, interface = None):
         assert nexthop or interface
     def add_default_route(self, nexthop, interface = None):
         return self.add_route('0.0.0.0', 0, nexthop, interface)
     def get_routes(self):
         return set()
-
-class Interface(object):
-    def __init__(self, mac_address = None, mtu = None):
-        self.name = None
-        self.mac_address = mac_address
-        self.mtu = mtu
-        self.valid = True
-    def add_v4_address(self, address, prefix_len, broadcast = None):
-        pass
-    def add_v6_address(self, address, prefix_len):
-        pass
 
 # Handle the creation of the child; parent gets (fd, pid), child creates and
 # runs a Server(); never returns.
@@ -110,4 +118,6 @@ def _start_child(debug, nonetns):
 
     os._exit(0)
     # NOTREACHED
+
+get_nodes = Node.get_nodes
 

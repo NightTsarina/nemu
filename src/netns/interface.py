@@ -1,11 +1,154 @@
 # vim:ts=4:sw=4:et:ai:sts=4
 
-import re, socket
+import os, re, socket, weakref
+import netns.iproute
 
-__all__ = ['interface', 'address', 'ipv6address', 'ipv4address']
+__all__ = ['NodeInterface', 'P2PInterface', 'ExternalInterface']
+
+# FIXME: should nodes register interfaces?
+
+class _Interface(object):
+    """Just a base class for the *Interface classes: assign names and handle
+    destruction."""
+    _nextid = 0
+    @staticmethod
+    def _gen_next_id():
+        n = _Interface._nextid
+        _Interface._nextid += 1
+        return n
+
+    @staticmethod
+    def _gen_if_name():
+        n = _Interface._gen_next_id()
+        # Max 15 chars
+        return "NETNSif-%.4x%.3x" % (os.getpid(), n)
+
+class _NSInterface(_Interface):
+    """Add user-facing methods for interfaces that go into a netns."""
+    def destroy(self):
+        try:
+            # no need to check _ns_if, exceptions are ignored anyways
+            self._slave.del_if(self._ns_if)
+        except:
+            # Maybe it already went away, or the slave died. Anyway, better
+            # ignore the error
+            pass
+
+    def __del__(self):
+        self.destroy()
+
+    @property
+    def index(self):
+        return self._ns_if
+
+    # some black magic to automatically get/set interface attributes
+    def __getattr__(self, name):
+        if (name not in interface.changeable_attributes):
+            raise AttributeError("'%s' object has no attribute '%s'" %
+                    (self.__class__.__name__, name))
+        # I can use attributes now, as long as they are not in
+        # changeable_attributes
+        iface = self._slave.get_if_data(self._ns_if)
+        return getattr(iface, name)
+
+    def __setattr__(self, name, value):
+        if (name not in interface.changeable_attributes):
+            super(_Interface, self).__setattr__(name, value)
+            return
+        iface = interface(index = self._ns_if)
+        setattr(iface, name, value)
+        return self._slave.set_if(iface)
+
+    def add_v4_address(self, address, prefix_len, broadcast = None):
+        pass
+    def add_v6_address(self, address, prefix_len):
+        pass
+
+class NodeInterface(_NSInterface):
+    """Class to create and handle a virtual interface inside a name space, it
+    can be connected to a Link object with emulation of link
+    characteristics."""
+    def __init__(self, node):
+        """Create a new interface. `node' is the name space in which this
+        interface should be put."""
+        if1 = interface(name = self._gen_if_name())
+        if2 = interface(name = self._gen_if_name())
+        ctl, ns = netns.iproute.create_if_pair(if1, if2)
+        try:
+            netns.iproute.change_netns(ns, node.pid)
+        except:
+            netns.iproute.del_if(ctl)
+            # the other interface should go away automatically
+            raise
+        self._ctl_if = ctl.index
+        self._ns_if = ns.index
+        self._slave = node._slave
+        node._add_interface(self)
+
+    @property
+    def control_index(self):
+        return self._ctl_if
+
+class P2PInterface(_NSInterface):
+    """Class to create and handle point-to-point interfaces between name
+    spaces, without using Link objects. Those do not allow any kind of traffic
+    shaping.
+    As two interfaces need to be created, instead of using the class
+    constructor, use the P2PInterface.create_pair() static method."""
+    @staticmethod
+    def create_pair(node1, node2):
+        """Create and return a pair of connected P2PInterface objects, assigned
+        to name spaces represented by `node1' and `node2'."""
+        if1 = interface(name = P2PInterface._gen_if_name())
+        if2 = interface(name = P2PInterface._gen_if_name())
+        pair = netns.iproute.create_if_pair(if1, if2)
+        try:
+            netns.iproute.change_netns(pair[0], node1.pid)
+            netns.iproute.change_netns(pair[1], node2.pid)
+        except:
+            netns.iproute.del_if(pair[0])
+            # the other interface should go away automatically
+            raise
+
+        o1 = P2PInterface.__new__(P2PInterface)
+        o1._slave = node1._slave
+        o1._ns_if = pair[0].index
+        node1._add_interface(o1)
+
+        o2 = P2PInterface.__new__(P2PInterface)
+        o2._slave = node2._slave
+        o2._ns_if = pair[1].index
+        node2._add_interface(o2)
+
+        return o1, o2
+
+    def __init__(self):
+        "Not to be called directly. Use P2PInterface.create_pair()"
+        raise RuntimeError(P2PInterface.__init__.__doc__)
+
+class ExternalInterface(_Interface):
+    """Class to handle already existing interfaces. This kind of interfaces can
+    only be connected to Link objects and not assigned to a name space.
+    On destruction, the code will try to restore the interface to the state it
+    was in before being imported into netns."""
+    def __init__(self, iface):
+        iface = netns.iproute.get_if(iface)
+        self._ctl_if = iface.index
+        self._original_state = iface
+
+    def destroy(self): # override: restore as much as possible
+        try:
+            netns.iproute.set_if(self._original_state)
+        except:
+            pass
+
+    @property
+    def control_index(self):
+        return self._ctl_if
+
+# don't look after this :-)
 
 # helpers
-
 def _any_to_bool(any):
     if isinstance(any, bool):
         return any
@@ -33,9 +176,14 @@ def _make_setter(attr, conv = lambda x: x):
             setattr(self, attr, conv(value))
     return setter
 
+# classes for internal use
 class interface(object):
+    """Class for internal use. It is mostly a data container used to easily
+    pass information around; with some convenience methods."""
     @classmethod
     def parse_ip(cls, line):
+        """Parse a line of ouput from `ip -o link list' and construct and
+        return a new object with the data."""
         match = re.search(r'^(\d+): (\S+): <(\S+)> mtu (\d+) qdisc \S+' +
                 r'.*link/\S+ ([0-9a-f:]+) brd ([0-9a-f:]+)', line)
         flags = match.group(3).split(",")
@@ -48,6 +196,10 @@ class interface(object):
                 arp     = not ("NOARP" in flags),
                 broadcast = match.group(6),
                 multicast = "MULTICAST" in flags)
+
+    # information for other parts of the code
+    changeable_attributes = ["name", "mtu", "lladdr", "broadcast", "up",
+            "multicast", "arp"]
 
     index = property(_make_getter("_index"), _make_setter("_index", int))
     up = property(_make_getter("_up"), _make_setter("_up", _any_to_bool))
@@ -90,8 +242,14 @@ class interface(object):
                 multicast, arp)
 
 class address(object):
+    """Class for internal use. It is mostly a data container used to easily
+    pass information around; with some convenience methods. __eq__ and __hash__
+    are defined just to be able to easily find duplicated addresses."""
     @classmethod
     def parse_ip(cls, line):
+        """Parse a line of ouput from `ip -o addr list' (after trimming the
+        index and interface name) and construct and return a new object with
+        the data."""
         match = re.search(r'^inet ([0-9.]+)/(\d+)(?: brd ([0-9.]+))?', line)
         if match != None:
             return ipv4address(
