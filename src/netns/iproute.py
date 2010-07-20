@@ -95,14 +95,39 @@ def del_if(iface):
     _execute(["ip", "link", "del", ifname])
 
 def set_if(iface, recover = True):
+    def do_cmds(cmds, orig_iface):
+        for c in cmds:
+            try:
+                _execute(c)
+            except:
+                if recover:
+                    set_if(orig_iface, recover = False) # rollback
+                    raise
+
     orig_iface = get_if(iface)
-    _ils = ["ip", "link", "set", "dev", orig_iface.name]
     diff = iface - orig_iface # Only set what's needed
-    cmds = []
+
+    # Name goes first
     if diff.name:
-        cmds.append(_ils + ["name", diff.name])
+        _ils = ["ip", "link", "set", "dev"]
+        cmds = [_ils + [orig_iface.name, "name", diff.name]]
+        if orig_iface.up:
+            # iface needs to be down
+            cmds = [_ils + [orig_iface.name, "down"], cmds[0],
+                    _ils + [diff.name, "up"]]
+        do_cmds(cmds, orig_iface)
+
+    # I need to use the new name after a name change, duh!
+    _ils = ["ip", "link", "set", "dev", diff.name or orig_iface.name]
+    cmds = []
     if diff.lladdr:
+        if orig_iface.up:
+            # iface needs to be down
+            cmds.append(_ils + ["down"])
         cmds.append(_ils + ["address", diff.lladdr])
+        if orig_iface.up and diff.up == None:
+            # restore if it was up and it's not going to be set later
+            cmds.append(_ils + ["up"])
     if diff.mtu:
         cmds.append(_ils + ["mtu", str(diff.mtu)])
     if diff.broadcast:
@@ -113,21 +138,8 @@ def set_if(iface, recover = True):
         cmds.append(_ils + ["arp", "on" if diff.arp else "off"])
     if diff.up != None:
         cmds.append(_ils + ["up" if diff.up else "down"])
-    
-    # iface needs to be down before changing name or address
-    if (diff.name or diff.lladdr) and orig_iface.up:
-        cmds.insert(0, _ils + ["down"])
-        if diff.up == None: # if it was not set already
-            cmds.append(_ils + ["up"])
 
-    #print cmds
-    for c in cmds:
-        try:
-            _execute(c)
-        except:
-            if recover:
-                set_if(orig_iface, recover = False) # rollback
-                raise
+    do_cmds(cmds, orig_iface)
 
 def change_netns(iface, netns):
     ifname = _get_if_name(iface)
@@ -178,7 +190,7 @@ def set_addr(iface, addresses, recover = True):
 # Useful stuff
 
 def _execute(cmd):
-    print " ".join(cmd)#; return
+    #print " ".join(cmd)#; return
     null = open('/dev/null', 'r+')
     p = subprocess.Popen(cmd, stdout = null, stderr = subprocess.PIPE)
     out, err = p.communicate()
