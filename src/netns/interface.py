@@ -53,6 +53,9 @@ class _NSInterface(_Interface):
 
     def __setattr__(self, name, value):
         if (name not in interface.changeable_attributes):
+            if name[0] != '_': # forbid anything that doesn't start with a _
+                raise AttributeError("'%s' object has no attribute '%s'" %
+                        (self.__class__.__name__, name))
             super(_Interface, self).__setattr__(name, value)
             return
         iface = interface(index = self._ns_if)
@@ -164,10 +167,36 @@ def _any_to_bool(any):
         return any != ""
     return bool(any)
 
+def _positive(val):
+    v = int(val)
+    if v <= 0:
+        raise ValueError("Invalid value: %d" % v)
+    return v
+
+def _fix_lladdr(addr):
+    foo = addr.lower()
+    if ':' in addr:
+        # Verify sanity and split
+        m = re.search('^' + ':'.join(['([0-9a-f]{1,2})'] * 6) + '$', foo)
+        if m is None:
+            raise ValueError("Invalid address: `%s'." % addr)
+        # Fill missing zeros and glue again
+        return ':'.join(('0' * (2 - len(x)) + x for x in m.groups()))
+
+    # Fill missing zeros
+    foo = '0' * (12 - len(foo)) + foo
+    # Verify sanity and split
+    m = re.search('^' + '([0-9a-f]{2})' * 6 + '$', foo)
+    if m is None:
+        raise ValueError("Invalid address: `%s'." % addr)
+    # Glue
+    return ":".join(m.groups())
+
 def _make_getter(attr, conv = lambda x: x):
     def getter(self):
         return conv(getattr(self, attr))
     return getter
+
 def _make_setter(attr, conv = lambda x: x):
     def setter(self, value):
         if value == None:
@@ -201,15 +230,18 @@ class interface(object):
     changeable_attributes = ["name", "mtu", "lladdr", "broadcast", "up",
             "multicast", "arp"]
 
-    index = property(_make_getter("_index"), _make_setter("_index", int))
+    # Index should be read-only
+    index = property(_make_getter("_index"))
     up = property(_make_getter("_up"), _make_setter("_up", _any_to_bool))
-    mtu = property(_make_getter("_mtu"), _make_setter("_mtu", int))
+    mtu = property(_make_getter("_mtu"), _make_setter("_mtu", _positive))
+    lladdr = property(_make_getter("_lladdr"),
+            _make_setter("_lladdr", _fix_lladdr))
     arp = property(_make_getter("_arp"), _make_setter("_arp", _any_to_bool))
     multicast = property(_make_getter("_mc"), _make_setter("_mc", _any_to_bool))
 
     def __init__(self, index = None, name = None, up = None, mtu = None,
             lladdr = None, broadcast = None, multicast = None, arp = None):
-        self.index = index
+        self._index = _positive(index) if index is not None else None
         self.name = name
         self.up = up
         self.mtu = mtu

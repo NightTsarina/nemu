@@ -18,7 +18,7 @@ def process_ipcmd(str):
             out[cur] = {
                     'idx':      match.group(1),
                     'flags':    match.group(3).split(","),
-                    'mtu':      match.group(4),
+                    'mtu':      int(match.group(4)),
                     'qdisc':    match.group(5),
                     'addr':     []
                     }

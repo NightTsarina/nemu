@@ -37,20 +37,33 @@ class TestInterfaces(unittest.TestCase):
             peer_name = netns.iproute.get_if(ifaces[i].control_index).name
             self.assertTrue(peer_name in devs)
 
-        self.assertEquals(set(ifaces), node0.get_interfaces())
+        self.assertEquals(set(ifaces), set(node0.get_interfaces()))
 
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_interface_settings(self):
         node0 = netns.Node()
         if0 = node0.add_if(lladdr = '42:71:e0:90:ca:42', mtu = 1492)
-        self.assertEquals(if0.lladdr, '42:71:e0:90:ca:42')
+        self.assertEquals(if0.lladdr, '42:71:e0:90:ca:42',
+                "Constructor parameters")
+        self.assertEquals(if0.mtu, 1492, "Constructor parameters")
         if0.lladdr = '4271E090CA42'
-        self.assertEquals(if0.lladdr, '42:71:e0:90:ca:42')
-        self.assertRaises(BaseException, setattr, if0, 'lladdr', 'foo')
-        self.assertRaises(BaseException, setattr, if0, 'lladdr', '12345678901')
+        self.assertEquals(if0.lladdr, '42:71:e0:90:ca:42', """Normalization of
+                link-level address: missing colons and upper caps""")
+        if0.lladdr = '2:71:E0:90:CA:42'
+        self.assertEquals(if0.lladdr, '02:71:e0:90:ca:42',
+                """Normalization of link-level address: missing zeroes""")
+        if0.lladdr = '271E090CA42'
+        self.assertEquals(if0.lladdr, '02:71:e0:90:ca:42',
+                """Automatic normalization of link-level address: missing
+                colons and zeroes""")
+        self.assertRaises(ValueError, setattr, if0, 'lladdr', 'foo')
+        self.assertRaises(ValueError, setattr, if0, 'lladdr', '1234567890123')
         self.assertEquals(if0.mtu, 1492)
-        self.assertRaises(BaseException, setattr, if0, 'mtu', 0)
-        self.assertRaises(BaseException, setattr, if0, 'mtu', 65537)
+        # detected by setter
+        self.assertRaises(ValueError, setattr, if0, 'mtu', 0)
+        # error from ip
+        self.assertRaises(RuntimeError, setattr, if0, 'mtu', 1)
+        self.assertRaises(RuntimeError, setattr, if0, 'mtu', 65537)
 
         devs = get_devs_netns(node0)
         self.assertTrue(if0.name in devs)
@@ -58,12 +71,13 @@ class TestInterfaces(unittest.TestCase):
         self.assertEquals(devs[if0.name]['lladdr'], if0.lladdr)
         self.assertEquals(devs[if0.name]['mtu'], if0.mtu)
 
-        if0.enable = True
+        if0.up = True
         devs = get_devs_netns(node0)
         self.assertTrue(devs[if0.name]['up'])
 
         # Verify that data is actually read from the kernel
-        node0.run_process(["ip", "link", "set", if0.name, "mtu", "1500"])
+        r = node0.system(["ip", "link", "set", if0.name, "mtu", "1500"])
+        self.assertEquals(r, 0)
         devs = get_devs_netns(node0)
         self.assertEquals(devs[if0.name]['mtu'], 1500)
         self.assertEquals(devs[if0.name]['mtu'], if0.mtu)
@@ -100,7 +114,6 @@ class TestInterfaces(unittest.TestCase):
                 prefix_len = 64)
 
         devs = get_devs_netns(node0)
-        print devs
         self.assertTrue( {
             'addr': '10.0.0.1', 'plen': 24,
             'bcast': '10.0.0.255', 'family': 'inet'
