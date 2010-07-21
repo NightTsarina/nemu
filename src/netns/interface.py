@@ -63,9 +63,37 @@ class _NSInterface(_Interface):
         return self._slave.set_if(iface)
 
     def add_v4_address(self, address, prefix_len, broadcast = None):
-        pass
+        addr = ipv4address(address, prefix_len, broadcast)
+        self._slave.add_addr(self._ns_if, addr)
+
     def add_v6_address(self, address, prefix_len):
-        pass
+        addr = ipv6address(address, prefix_len)
+        self._slave.add_addr(self._ns_if, addr)
+
+    def del_v4_address(self, address, prefix_len, broadcast = None):
+        addr = ipv4address(address, prefix_len, broadcast)
+        self._slave.del_addr(self._ns_if, addr)
+
+    def del_v6_address(self, address, prefix_len):
+        addr = ipv6address(address, prefix_len)
+        self._slave.del_addr(self._ns_if, addr)
+
+    def get_addresses(self):
+        addresses = self._slave.get_addr_data(self._ns_if)
+        ret = []
+        for a in addresses:
+            if hasattr(a, 'broadcast'):
+                ret.append(dict(
+                    address = a.address,
+                    prefix_len = a.prefix_len,
+                    broadcast = a.broadcast,
+                    family = 'inet'))
+            else:
+                ret.append(dict(
+                    address = a.address,
+                    prefix_len = a.prefix_len,
+                    family = 'inet6'))
+        return ret
 
 class NodeInterface(_NSInterface):
     """Class to create and handle a virtual interface inside a name space, it

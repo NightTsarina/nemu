@@ -15,8 +15,8 @@ class TestUtils(unittest.TestCase):
         self.assertTrue(devs['lo']['up'])
         self.assertEquals(devs['lo']['lladdr'], '00:00:00:00:00:00')
         self.assertTrue( {
-            'addr': '127.0.0.1', 'plen': 8,
-            'bcast': None, 'family': 'inet'
+            'address': '127.0.0.1', 'prefix_len': 8,
+            'broadcast': None, 'family': 'inet'
             } in devs['lo']['addr'])
 
 class TestInterfaces(unittest.TestCase):
@@ -115,20 +115,20 @@ class TestInterfaces(unittest.TestCase):
 
         devs = get_devs_netns(node0)
         self.assertTrue( {
-            'addr': '10.0.0.1', 'plen': 24,
-            'bcast': '10.0.0.255', 'family': 'inet'
+            'address': '10.0.0.1', 'prefix_len': 24,
+            'broadcast': '10.0.0.255', 'family': 'inet'
             } in devs[if0.name]['addr'])
         self.assertTrue( {
-            'addr': '10.0.2.1', 'plen': 26,
-            'bcast': None, 'family': 'inet'
+            'address': '10.0.2.1', 'prefix_len': 26,
+            'broadcast': '10.0.2.63', 'family': 'inet'
             } in devs[if0.name]['addr'])
         self.assertTrue( {
-            'addr': 'fe80::222:19ff:fe22:615d', 'plen': 64,
-            'bcast': None, 'family': 'inet6'
+            'address': 'fe80::222:19ff:fe22:615d', 'prefix_len': 64,
+            'family': 'inet6'
             } in devs[if0.name]['addr'])
 
-        # FIXME: proper tests when I decide on the data format
         self.assertTrue(len(if0.get_addresses()) >= 2)
+        self.assertEquals(if0.get_addresses(), devs[if0.name]['addr'])
 
 # FIXME: Links
 

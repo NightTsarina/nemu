@@ -34,17 +34,17 @@ def process_ipcmd(str):
         match = re.search(r'^\s+inet ([0-9.]+)/(\d+)(?: brd ([0-9.]+))?', line)
         if match != None:
             out[cur]['addr'].append({
-                'addr': match.group(1),
-                'plen': int(match.group(2)),
-                'bcast': match.group(3),
+                'address': match.group(1),
+                'prefix_len': int(match.group(2)),
+                'broadcast': match.group(3),
                 'family': 'inet'})
             continue
 
         match = re.search(r'^\s+inet6 ([0-9a-f:]+)/(\d+)(?: |$)', line)
         if match != None:
             out[cur]['addr'].append({
-                'addr': match.group(1),
-                'plen': int(match.group(2)),
+                'address': match.group(1),
+                'prefix_len': int(match.group(2)),
                 'family': 'inet6'})
             continue
 
