@@ -285,7 +285,6 @@ class TestSubprocess(unittest.TestCase):
         self.assertEquals(system(node, "true"), 0)
         self.assertEquals(system(node, "false"), 1)
 
-# FIXME: tests for Popen!
 if __name__ == '__main__':
     unittest.main()
 
