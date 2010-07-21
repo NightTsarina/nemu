@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # vim:ts=4:sw=4:et:ai:sts=4
 
-import grp, os, pwd, unittest
+import grp, os, pwd, time, unittest
 import netns, test_util
 
 class TestConfigure(unittest.TestCase):
@@ -24,12 +24,23 @@ class TestGlobal(unittest.TestCase):
         n2 = netns.Node()
         i1, i2 = netns.P2PInterface.create_pair(n1, n2)
         i1.up = i2.up = True
+        i1.lladdr = 'd6:4b:3f:f7:ff:7e'
+        i2.lladdr = 'd6:4b:3f:f7:ff:7f'
         i1.add_v4_address('10.0.0.1', 24)
         i2.add_v4_address('10.0.0.2', 24)
 
         null = file('/dev/null', 'wb')
         a1 = n1.Popen(['ping', '-qc1', '10.0.0.2'], stdout = null)
         a2 = n2.Popen(['ping', '-qc1', '10.0.0.1'], stdout = null)
+        self.assertEquals(a1.wait(), 0)
+        self.assertEquals(a2.wait(), 0)
+
+        # Test ipv6 autoconfigured addresses
+        time.sleep(2) # Wait for autoconfiguration
+        a1 = n1.Popen(['ping6', '-qc1', '-I', i1.name,
+            'fe80::d44b:3fff:fef7:ff7f'], stdout = null)
+        a2 = n2.Popen(['ping6', '-qc1', '-I', i2.name,
+            'fe80::d44b:3fff:fef7:ff7e'], stdout = null)
         self.assertEquals(a1.wait(), 0)
         self.assertEquals(a2.wait(), 0)
 
