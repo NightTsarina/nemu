@@ -5,8 +5,6 @@ import netns.iproute
 
 __all__ = ['NodeInterface', 'P2PInterface', 'ExternalInterface']
 
-# FIXME: should nodes register interfaces?
-
 class _Interface(object):
     """Just a base class for the *Interface classes: assign names and handle
     destruction."""
@@ -167,6 +165,7 @@ class ExternalInterface(_Interface):
         self._ctl_if = iface.index
         self._original_state = iface
 
+    # FIXME: register somewhere for destruction!
     def destroy(self): # override: restore as much as possible
         try:
             netns.iproute.set_if(self._original_state)
@@ -176,6 +175,26 @@ class ExternalInterface(_Interface):
     @property
     def control_index(self):
         return self._ctl_if
+
+class ExternalNodeInterface(_NSInterface):
+    """Class to handle already existing interfaces inside a name space, usually
+    just the loopback device, but it can be other user-created interfaces. On
+    destruction, the code will try to restore the interface to the state it was
+    in before being imported into netns."""
+    def __init__(self, node, iface):
+        iface = node._slave.get_if_data(iface)
+        self._original_state = iface
+
+        self._ns_if = iface.index
+        self._slave = node._slave
+        node._add_interface(self)
+
+    # FIXME: register somewhere for destruction!
+    def destroy(self): # override: restore as much as possible
+        try:
+            self._slave.set_if(self._original_state)
+        except:
+            pass
 
 # don't look after this :-)
 

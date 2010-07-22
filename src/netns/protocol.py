@@ -422,7 +422,6 @@ class Client(object):
             e = yaml.load(text)
             raise e
         if code / 100 != expected:
-            # FIXME: shuld try to save and re-create exceptions
             raise RuntimeError("Error from slave: %d %s" % (code, text))
         return text
 

@@ -54,12 +54,16 @@ class Node(object):
 
     def Subprocess(self, *kargs, **kwargs):
         return netns.subprocess_.Subprocess(self, *kargs, **kwargs)
+
     def Popen(self, *kargs, **kwargs):
         return netns.subprocess_.Popen(self, *kargs, **kwargs)
+
     def system(self, *kargs, **kwargs):
         return netns.subprocess_.system(self, *kargs, **kwargs)
+
     def backticks(self, *kargs, **kwargs):
         return netns.subprocess_.backticks(self, *kargs, **kwargs)
+
     def backticks_raise(self, *kargs, **kwargs):
         return netns.subprocess_.backticks_raise(self, *kargs, **kwargs)
 
@@ -72,11 +76,29 @@ class Node(object):
         for k, v in kwargs.items():
             setattr(i, k, v)
         return i
-    def get_interfaces(self):
-        # FIXME: loopback et al
-        s = sorted(self._interfaces.items(), key = lambda x: x[0])
-        return [x[1] for x in s]
 
+    def del_if(self, iface):
+        """Doesn't destroy the interface if it wasn't created by us."""
+        del self._interfaces[iface.index]
+        iface.destroy()
+
+    def get_interfaces(self):
+        ifaces = self._slave.get_if_data()
+        ret = []
+        for i in ifaces:
+            if i not in self._interfaces:
+                ret.append(netns.interface.ExternalNodeInterface(self, i))
+            else:
+                ret.append(self._interfaces[i])
+        # by the way, clean up _interfaces
+        for i in self._interfaces:
+            if i not in ifaces:
+                sys.stderr.write("WARNING: interface #%d went away." % i)
+                del self._interfaces[i]
+
+        return sorted(ret, key = lambda x: x.index)
+
+    # FIXME: Routing
     def add_route(self, prefix, prefix_len, nexthop = None, interface = None):
         assert nexthop or interface
     def add_default_route(self, nexthop, interface = None):
