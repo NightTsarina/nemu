@@ -16,7 +16,7 @@ def process_ipcmd(str):
         if match != None:
             cur = match.group(2)
             out[cur] = {
-                    'idx':      match.group(1),
+                    'idx':      int(match.group(1)),
                     'flags':    match.group(3).split(","),
                     'mtu':      int(match.group(4)),
                     'qdisc':    match.group(5),
