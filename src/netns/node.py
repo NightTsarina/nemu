@@ -34,10 +34,13 @@ class Node(object):
         self.destroy()
 
     def destroy(self):
+        if self.debug: # pragma: no cover
+            sys.stderr.write("*** Node(%s) destroy\n" % self.pid)
         for p in self._processes.values():
             p.destroy()
         del self._processes
-        for i in self._interfaces.values():
+        # Use get_interfaces to force a rescan
+        for i in self.get_interfaces():
             i.destroy()
         del self._interfaces
         del self._pid
