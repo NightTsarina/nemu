@@ -257,7 +257,7 @@ class Server(object):
                 cmdname)
         try:
             fd, payload = passfd.recvfd(self._rfd, len(cmdname) + 1)
-        except (IOError, BaseException), e: # FIXME
+        except (IOError, RuntimeError), e:
             self.reply(500, "Error receiving FD: %s" % str(e))
             return
 
