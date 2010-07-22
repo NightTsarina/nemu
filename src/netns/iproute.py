@@ -195,7 +195,7 @@ def set_addr(iface, addresses, recover = True):
 
 def create_bridge(br):
     if isinstance(br, str):
-        br = interface(name = br)
+        br = netns.interface.interface(name = br)
     assert br.name
     _execute(['brctl', 'addbr', br.name])
     try:
