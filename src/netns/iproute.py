@@ -193,6 +193,35 @@ def set_addr(iface, addresses, recover = True):
 
 # Bridge handling
 
+def get_br_data():
+    ifdata = get_if_data()
+    ipcmd = subprocess.Popen(["brctl", "show"], stdout = subprocess.PIPE)
+    ipdata = ipcmd.communicate()[0]
+    assert ipcmd.wait() == 0
+
+    byidx = {}
+    bynam = {}
+    ports = {}
+    last = None
+    for line in ipdata.split("\n")[1:]: # skip header
+        if line == "":
+            continue
+        if last:
+            match = re.search(r'^\s+(\S+)$', line)
+            if match:
+                ports[last].append(ifdata[1][match.group(1)])
+                continue
+
+        match = re.search(r'^(\S+)\s+\S+\s+\S+\s*(\S+)?', line)
+        if not match:
+            raise RuntimeError("Invalid `brctl' command output")
+        name = match.group(1)
+        last = idx = ifdata[1][name].index
+
+        bynam[name] = byidx[idx] = ifdata[1][name]
+        ports[idx] = []
+    return byidx, bynam, ports
+
 def create_bridge(br):
     if isinstance(br, str):
         br = netns.interface.interface(name = br)
