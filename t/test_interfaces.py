@@ -119,7 +119,8 @@ class TestWithDummy(unittest.TestCase):
     def setUp(self):
         self.cleanup = []
 
-    @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
+    #@test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
+    @test_util.skip("Test trigger a kernel bug on 2.6.34")
     def test_interface_migration(self):
         node = netns.Node()
         dummyname = "dummy%d" % os.getpid()
@@ -132,7 +133,6 @@ class TestWithDummy(unittest.TestCase):
         self.cleanup += [(dummyidx, None)]
 
         # Move manually
-#        import pdb; pdb.set_trace()
         netns.iproute.change_netns(dummyidx, node.pid)
         self.cleanup.remove((dummyidx, None))
         self.cleanup += [(dummyidx, node)]
@@ -156,7 +156,8 @@ class TestWithDummy(unittest.TestCase):
                 n.del_if(j)
                 n._slave.change_netns(i, os.getpid())
             iface = netns.iproute.get_if(i)
-            #os.system("ip link del %s" % iface.name)
+            # oops here
+            os.system("ip link del %s" % iface.name)
 
 # FIXME: Links
 
