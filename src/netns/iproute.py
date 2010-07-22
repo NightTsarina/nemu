@@ -40,28 +40,6 @@ def get_if(iface):
         return ifdata[0][iface]
     return ifdata[1][iface]
 
-def get_addr_data():
-    ipcmd = subprocess.Popen(["ip", "-o", "addr", "list"],
-        stdout = subprocess.PIPE)
-    ipdata = ipcmd.communicate()[0]
-    assert ipcmd.wait() == 0
-
-    byidx = {}
-    bynam = {}
-    for line in ipdata.split("\n"):
-        if line == "":
-            continue
-        match = re.search(r'^(\d+):\s+(\S+?)(:?)\s+(.*)', line)
-        if not match:
-            raise RuntimeError("Invalid `ip' command output")
-        idx = int(match.group(1))
-        name = match.group(2)
-        if match.group(3):
-            bynam[name] = byidx[idx] = []
-            continue # link info
-        bynam[name].append(netns.interface.address.parse_ip(match.group(4)))
-    return byidx, bynam
-
 def create_if_pair(if1, if2):
     assert if1.name and if2.name
 
@@ -148,6 +126,28 @@ def change_netns(iface, netns):
     _execute(["ip", "link", "set", "dev", ifname, "netns", str(netns)])
 
 # Address handling
+
+def get_addr_data():
+    ipcmd = subprocess.Popen(["ip", "-o", "addr", "list"],
+        stdout = subprocess.PIPE)
+    ipdata = ipcmd.communicate()[0]
+    assert ipcmd.wait() == 0
+
+    byidx = {}
+    bynam = {}
+    for line in ipdata.split("\n"):
+        if line == "":
+            continue
+        match = re.search(r'^(\d+):\s+(\S+?)(:?)\s+(.*)', line)
+        if not match:
+            raise RuntimeError("Invalid `ip' command output")
+        idx = int(match.group(1))
+        name = match.group(2)
+        if match.group(3):
+            bynam[name] = byidx[idx] = []
+            continue # link info
+        bynam[name].append(netns.interface.address.parse_ip(match.group(4)))
+    return byidx, bynam
 
 def add_addr(iface, address):
     ifname = _get_if_name(iface)
