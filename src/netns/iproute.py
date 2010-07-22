@@ -4,6 +4,8 @@ import re, subprocess, sys
 import netns.interface
 
 # XXX: ideally this should be replaced by netlink communication
+
+# Interface handling
 def get_if_data():
     """Gets current interface information. Returns a tuple (byidx, bynam) in
     which each element is a dictionary with the same data, but using different
@@ -145,6 +147,8 @@ def change_netns(iface, netns):
     ifname = _get_if_name(iface)
     _execute(["ip", "link", "set", "dev", ifname, "netns", str(netns)])
 
+# Address handling
+
 def add_addr(iface, address):
     ifname = _get_if_name(iface)
     addresses = get_addr_data()[1][ifname]
@@ -186,6 +190,38 @@ def set_addr(iface, addresses, recover = True):
             if recover:
                 set_addr(orig_addresses, recover = False) # rollback
                 raise
+
+# Bridge handling
+
+def create_bridge(br):
+    if isinstance(br, str):
+        br = interface(name = br)
+    assert br.name
+    _execute(['brctl', 'addbr', br.name])
+    try:
+        set_if(br)
+    except:
+        (t, v, bt) = sys.exc_info()
+        try:
+            del_bridge(br)
+        except:
+            pass
+        raise t, v, bt
+    return get_if_data()[1][br.name]
+
+def del_bridge(br):
+    brname = _get_if_name(br)
+    _execute(["brctl", "delbr", brname])
+
+def add_bridge_port(br, iface):
+    ifname = _get_if_name(iface)
+    brname = _get_if_name(br)
+    _execute(['brctl', 'addif', brname, ifname])
+
+def del_bridge_port(br, iface):
+    ifname = _get_if_name(iface)
+    brname = _get_if_name(br)
+    _execute(['brctl', 'delif', brname, ifname])
 
 # Useful stuff
 
