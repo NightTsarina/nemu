@@ -3,41 +3,51 @@
 import os, re, socket, weakref
 import netns.iproute
 
-__all__ = ['NodeInterface', 'P2PInterface', 'ExternalInterface']
+__all__ = ['NodeInterface', 'P2PInterface', 'ForeignInterface',
+'ForeignNodeInterface', 'Link']
 
-class _Interface(object):
+class Interface(object):
     """Just a base class for the *Interface classes: assign names and handle
     destruction."""
     _nextid = 0
     @staticmethod
     def _gen_next_id():
-        n = _Interface._nextid
-        _Interface._nextid += 1
+        n = Interface._nextid
+        Interface._nextid += 1
         return n
 
     @staticmethod
     def _gen_if_name():
-        n = _Interface._gen_next_id()
+        n = Interface._gen_next_id()
         # Max 15 chars
         return "NETNSif-%.4x%.3x" % (os.getpid(), n)
 
-class _NSInterface(_Interface):
-    """Add user-facing methods for interfaces that go into a netns."""
-    def destroy(self):
-        try:
-            # no need to check _ns_if, exceptions are ignored anyways
-            self._slave.del_if(self._ns_if)
-        except:
-            # Maybe it already went away, or the slave died. Anyway, better
-            # ignore the error
-            pass
+    def __init__(self, index):
+        self._idx = index
 
     def __del__(self):
         self.destroy()
 
+    def destroy(self):
+        raise NotImplementedError
+
     @property
     def index(self):
-        return self._ns_if
+        """Interface index as seen by the kernel."""
+        return self._idx
+
+    @property
+    def control(self):
+        """Associated interface in the main name space (if it exists). Only
+        control interfaces can be put into a Link, for example."""
+        return None
+
+class NSInterface(Interface):
+    """Add user-facing methods for interfaces that go into a netns."""
+    def __init__(self, node, index):
+        super(NSInterface, self).__init__(index)
+        self._slave = node._slave
+        node._add_interface(self)
 
     # some black magic to automatically get/set interface attributes
     def __getattr__(self, name):
@@ -46,7 +56,7 @@ class _NSInterface(_Interface):
                     (self.__class__.__name__, name))
         # I can use attributes now, as long as they are not in
         # changeable_attributes
-        iface = self._slave.get_if_data(self._ns_if)
+        iface = self._slave.get_if_data(self.index)
         return getattr(iface, name)
 
     def __setattr__(self, name, value):
@@ -54,30 +64,30 @@ class _NSInterface(_Interface):
             if name[0] != '_': # forbid anything that doesn't start with a _
                 raise AttributeError("'%s' object has no attribute '%s'" %
                         (self.__class__.__name__, name))
-            super(_Interface, self).__setattr__(name, value)
+            super(Interface, self).__setattr__(name, value)
             return
-        iface = interface(index = self._ns_if)
+        iface = interface(index = self.index)
         setattr(iface, name, value)
         return self._slave.set_if(iface)
 
     def add_v4_address(self, address, prefix_len, broadcast = None):
         addr = ipv4address(address, prefix_len, broadcast)
-        self._slave.add_addr(self._ns_if, addr)
+        self._slave.add_addr(self.index, addr)
 
     def add_v6_address(self, address, prefix_len):
         addr = ipv6address(address, prefix_len)
-        self._slave.add_addr(self._ns_if, addr)
+        self._slave.add_addr(self.index, addr)
 
     def del_v4_address(self, address, prefix_len, broadcast = None):
         addr = ipv4address(address, prefix_len, broadcast)
-        self._slave.del_addr(self._ns_if, addr)
+        self._slave.del_addr(self.index, addr)
 
     def del_v6_address(self, address, prefix_len):
         addr = ipv6address(address, prefix_len)
-        self._slave.del_addr(self._ns_if, addr)
+        self._slave.del_addr(self.index, addr)
 
     def get_addresses(self):
-        addresses = self._slave.get_addr_data(self._ns_if)
+        addresses = self._slave.get_addr_data(self.index)
         ret = []
         for a in addresses:
             if hasattr(a, 'broadcast'):
@@ -93,7 +103,7 @@ class _NSInterface(_Interface):
                     family = 'inet6'))
         return ret
 
-class NodeInterface(_NSInterface):
+class NodeInterface(NSInterface):
     """Class to create and handle a virtual interface inside a name space, it
     can be connected to a Link object with emulation of link
     characteristics."""
@@ -109,16 +119,22 @@ class NodeInterface(_NSInterface):
             netns.iproute.del_if(ctl)
             # the other interface should go away automatically
             raise
-        self._ctl_if = ctl.index
-        self._ns_if = ns.index
-        self._slave = node._slave
-        node._add_interface(self)
+        self._control = SlaveInterface(ctl.index)
+        super(NodeInterface, self).__init__(node, ns.index)
 
     @property
-    def control_index(self):
-        return self._ctl_if
+    def control(self):
+        return self._control
 
-class P2PInterface(_NSInterface):
+    def destroy(self):
+        try:
+            self._slave.del_if(self.index)
+        except:
+            # Maybe it already went away, or the slave died. Anyway, better
+            # ignore the error
+            pass
+
+class P2PInterface(NSInterface):
     """Class to create and handle point-to-point interfaces between name
     spaces, without using Link objects. Those do not allow any kind of traffic
     shaping.
@@ -140,14 +156,10 @@ class P2PInterface(_NSInterface):
             raise
 
         o1 = P2PInterface.__new__(P2PInterface)
-        o1._slave = node1._slave
-        o1._ns_if = pair[0].index
-        node1._add_interface(o1)
+        super(P2PInterface, o1).__init__(node1, pair[0].index)
 
         o2 = P2PInterface.__new__(P2PInterface)
-        o2._slave = node2._slave
-        o2._ns_if = pair[1].index
-        node2._add_interface(o2)
+        super(P2PInterface, o2).__init__(node2, pair[1].index)
 
         return o1, o2
 
@@ -155,15 +167,105 @@ class P2PInterface(_NSInterface):
         "Not to be called directly. Use P2PInterface.create_pair()"
         raise RuntimeError(P2PInterface.__init__.__doc__)
 
-class ExternalInterface(_Interface):
+    def destroy(self):
+        try:
+            self._slave.del_if(self.index)
+        except:
+            pass
+
+class ForeignNodeInterface(NSInterface):
+    """Class to handle already existing interfaces inside a name space, usually
+    just the loopback device, but it can be other user-created interfaces. On
+    destruction, the code will try to restore the interface to the state it was
+    in before being imported into netns."""
+    def __init__(self, node, iface):
+        iface = node._slave.get_if_data(iface)
+        self._original_state = iface
+        super(ForeignNodeInterface, self).__init__(node, iface.index)
+
+    # FIXME: register somewhere for destruction!
+    def destroy(self): # override: restore as much as possible
+        try:
+            self._slave.set_if(self._original_state)
+        except:
+            pass
+
+class ExternalInterface(Interface):
+    """Add user-facing methods for interfaces that run in the main namespace."""
+    @property
+    def control(self):
+        # This is *the* control interface
+        return self
+
+    # some black magic to automatically get/set interface attributes
+    def __getattr__(self, name):
+        if (name not in interface.changeable_attributes):
+            raise AttributeError("'%s' object has no attribute '%s'" %
+                    (self.__class__.__name__, name))
+        # I can use attributes now, as long as they are not in
+        # changeable_attributes
+        iface = netns.iproute.get_if(self.index)
+        return getattr(iface, name)
+
+    def __setattr__(self, name, value):
+        if (name not in interface.changeable_attributes):
+            if name[0] != '_': # forbid anything that doesn't start with a _
+                raise AttributeError("'%s' object has no attribute '%s'" %
+                        (self.__class__.__name__, name))
+            super(Interface, self).__setattr__(name, value)
+            return
+        iface = interface(index = self.index)
+        setattr(iface, name, value)
+        return netns.iproute.set_if(iface)
+
+    def add_v4_address(self, address, prefix_len, broadcast = None):
+        addr = ipv4address(address, prefix_len, broadcast)
+        netns.iproute.add_addr(self.index, addr)
+
+    def add_v6_address(self, address, prefix_len):
+        addr = ipv6address(address, prefix_len)
+        netns.iproute.add_addr(self.index, addr)
+
+    def del_v4_address(self, address, prefix_len, broadcast = None):
+        addr = ipv4address(address, prefix_len, broadcast)
+        netns.iproute.del_addr(self.index, addr)
+
+    def del_v6_address(self, address, prefix_len):
+        addr = ipv6address(address, prefix_len)
+        netns.iproute.del_addr(self.index, addr)
+
+    def get_addresses(self):
+        addresses = netns.iproute.get_addr_data(self.index)
+        ret = []
+        for a in addresses:
+            if hasattr(a, 'broadcast'):
+                ret.append(dict(
+                    address = a.address,
+                    prefix_len = a.prefix_len,
+                    broadcast = a.broadcast,
+                    family = 'inet'))
+            else:
+                ret.append(dict(
+                    address = a.address,
+                    prefix_len = a.prefix_len,
+                    family = 'inet6'))
+        return ret
+
+class SlaveInterface(ExternalInterface):
+    """Class to handle the main-name-space-facing couples of Nodeinterface.
+    Does nothing, just avoids any destroy code."""
+    def destroy(self):
+        pass
+
+class ForeignInterface(ExternalInterface):
     """Class to handle already existing interfaces. This kind of interfaces can
     only be connected to Link objects and not assigned to a name space.
     On destruction, the code will try to restore the interface to the state it
     was in before being imported into netns."""
     def __init__(self, iface):
         iface = netns.iproute.get_if(iface)
-        self._ctl_if = iface.index
         self._original_state = iface
+        super(ForeignInterface, self).__init__(iface.index)
 
     # FIXME: register somewhere for destruction!
     def destroy(self): # override: restore as much as possible
@@ -172,29 +274,59 @@ class ExternalInterface(_Interface):
         except:
             pass
 
-    @property
-    def control_index(self):
-        return self._ctl_if
+# Link is just another interface type
 
-class ExternalNodeInterface(_NSInterface):
-    """Class to handle already existing interfaces inside a name space, usually
-    just the loopback device, but it can be other user-created interfaces. On
-    destruction, the code will try to restore the interface to the state it was
-    in before being imported into netns."""
-    def __init__(self, node, iface):
-        iface = node._slave.get_if_data(iface)
-        self._original_state = iface
+class Link(ExternalInterface):
+    @staticmethod
+    def _gen_br_name():
+        n = Link._gen_next_id()
+        # Max 15 chars
+        return "NETNSbr-%.4x%.3x" % (os.getpid(), n)
 
-        self._ns_if = iface.index
-        self._slave = node._slave
-        node._add_interface(self)
+    def __init__(self, bandwidth = None, delay = None, delay_jitter = None,
+            delay_correlation = None, delay_distribution = None, loss = None,
+            loss_correlation = None, dup = None, dup_correlation = None,
+            corrupt = None, corrupt_correlation = None):
 
-    # FIXME: register somewhere for destruction!
-    def destroy(self): # override: restore as much as possible
-        try:
-            self._slave.set_if(self._original_state)
-        except:
-            pass
+        self._bandwidth = bandwidth
+        self._delay = delay
+        self._delay_jitter = delay_jitter
+        self._delay_correlation = delay_correlation
+        self._delay_distribution = delay_distribution
+        self._loss = loss
+        self._loss_correlation = loss_correlation
+        self._dup = dup
+        self._dup_correlation = dup_correlation
+        self._corrupt = corrupt
+        self._corrupt_correlation = corrupt_correlation
+
+        iface = netns.iproute.create_bridge(self._gen_br_name())
+        super(Link, self).__init__(iface.index)
+
+        self._ports = set()
+        # register somewhere
+
+    def __del__(self):
+        self.destroy()
+
+    def destroy(self):
+        for p in self._ports:
+            try:
+                self.disconnect(p)
+            except:
+                pass
+        netns.iproute.del_bridge(self.index)
+
+    def connect(self, iface):
+        assert iface.control.index not in self._ports
+        netns.iproute.add_bridge_port(self.index, iface.control.index)
+        self._ports.add(iface.control.index)
+
+    def disconnect(self, iface):
+        assert iface.control.index in self._ports
+        netns.iproute.del_bridge_port(self.index, iface.control.index)
+        self._ports.remove(iface.control.index)
+
 
 # don't look after this :-)
 

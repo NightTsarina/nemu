@@ -46,8 +46,4 @@ config = __Config()
 def set_cleanup_hooks(on_exit = False, on_signals = []):
     pass
 
-class Link(object):
-    def connect(self, iface):
-        pass
-
 

@@ -40,7 +40,7 @@ class TestInterfaces(unittest.TestCase):
 
         devs = get_devs()
         for i in range(5):
-            peer_name = netns.iproute.get_if(ifaces[i].control_index).name
+            peer_name = netns.iproute.get_if(ifaces[i].control.index).name
             self.assertTrue(peer_name in devs)
 
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")

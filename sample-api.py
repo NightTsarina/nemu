@@ -53,7 +53,7 @@ link0.connect(if1)
 
 # Add and connect a tap device (as if a external router were plugged into a
 # switch)
-if2 = netns.ExternalInterface('tap0')
+if2 = netns.ForeignInterface('tap0')
 link0.connect(if2)
 
 link0.up = True

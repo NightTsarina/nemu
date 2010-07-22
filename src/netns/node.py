@@ -93,7 +93,7 @@ class Node(object):
         ret = []
         for i in ifaces:
             if i not in self._interfaces:
-                ret.append(netns.interface.ExternalNodeInterface(self, i))
+                ret.append(netns.interface.ForeignNodeInterface(self, i))
             else:
                 ret.append(self._interfaces[i])
         # by the way, clean up _interfaces
