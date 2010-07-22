@@ -23,6 +23,7 @@ class Node(object):
         communication protocol are printed on stderr."""
         fd, pid = _start_child(debug, nonetns)
         self._pid = pid
+        self._debug = debug
         self._slave = netns.protocol.Client(fd, fd, debug)
         self._processes = weakref.WeakValueDictionary()
         self._interfaces = weakref.WeakValueDictionary()
@@ -31,10 +32,12 @@ class Node(object):
         Node._nextnode += 1
 
     def __del__(self):
+        if self._debug: # pragma: no cover
+            sys.stderr.write("*** Node(%s) __del__\n" % self.pid)
         self.destroy()
 
     def destroy(self):
-        if self.debug: # pragma: no cover
+        if self._debug: # pragma: no cover
             sys.stderr.write("*** Node(%s) destroy\n" % self.pid)
         for p in self._processes.values():
             p.destroy()
@@ -94,9 +97,10 @@ class Node(object):
             else:
                 ret.append(self._interfaces[i])
         # by the way, clean up _interfaces
-        for i in self._interfaces:
+        for i in list(self._interfaces): # copy before deleting!
             if i not in ifaces:
-                sys.stderr.write("WARNING: interface #%d went away." % i)
+                if self._debug:
+                    sys.stderr.write("WARNING: interface #%d went away." % i)
                 del self._interfaces[i]
 
         return sorted(ret, key = lambda x: x.index)
