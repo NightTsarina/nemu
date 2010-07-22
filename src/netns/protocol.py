@@ -343,8 +343,8 @@ class Server(object):
         netns.iproute.set_if(iface)
         self.reply(200, "Done.")
 
-    def do_IF_RTRN(self, cmdname, ifnr, netns):
-        netns.iproute.change_netns(ifnr, netns)
+    def do_IF_RTRN(self, cmdname, ifnr, ns):
+        netns.iproute.change_netns(ifnr, ns)
         self.reply(200, "Done.")
 
     def do_IF_DEL(self, cmdname, ifnr):
