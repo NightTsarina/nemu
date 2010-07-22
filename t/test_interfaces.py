@@ -121,7 +121,7 @@ class TestWithDummy(unittest.TestCase):
 
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_interface_migration(self):
-        node = netns.Node(debug = 1)
+        node = netns.Node()
         dummyname = "dummy%d" % os.getpid()
         self.assertEquals(
                 os.system("ip link add name %s type dummy" % dummyname), 0)
