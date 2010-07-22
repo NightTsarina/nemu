@@ -32,12 +32,16 @@ class TestInterfaces(unittest.TestCase):
             self.assertFalse(devs['lo']['up'])
             self.assertTrue(ifaces[i].name in devs)
 
+        node_devs = set(node0.get_interfaces())
+        self.assertTrue(set(ifaces).issubset(node_devs))
+        loopback = node_devs - set(ifaces) # should be!
+        self.assertEquals(len(loopback), 1)
+        self.assertEquals(loopback.pop().name, 'lo')
+
         devs = get_devs()
         for i in range(5):
             peer_name = netns.iproute.get_if(ifaces[i].control_index).name
             self.assertTrue(peer_name in devs)
-
-        self.assertEquals(set(ifaces), set(node0.get_interfaces()))
 
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_interface_settings(self):
@@ -84,25 +88,6 @@ class TestInterfaces(unittest.TestCase):
 
         # FIXME: get_stats
 
-    #@test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
-    @test_util.skip("Not implemented")
-    def test_interface_migration(self):
-        node0 = netns.Node()
-        dummyname = "dummy%d" % os.getpid()
-        self.assertEquals(
-                os.system("ip link add name %s type dummy" % dummyname), 0)
-        devs = get_devs()
-        self.assertTrue(dummyname in devs)
-
-        if0 = node0.import_if(dummyname)
-        if0.lladdr = '42:71:e0:90:ca:43'
-        if0.mtu = 1400
-
-        devs = get_devs_netns(node0)
-        self.assertTrue(if0.name in devs)
-        self.assertEquals(devs[if0.name]['lladdr'], if0.lladdr)
-        self.assertEquals(devs[if0.name]['mtu'], if0.mtu)
-
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_interface_addresses(self):
         node0 = netns.Node()
@@ -129,6 +114,49 @@ class TestInterfaces(unittest.TestCase):
 
         self.assertTrue(len(if0.get_addresses()) >= 2)
         self.assertEquals(if0.get_addresses(), devs[if0.name]['addr'])
+
+class TestWithDummy(unittest.TestCase):
+    def setUp(self):
+        self.cleanup = []
+
+    @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
+    def test_interface_migration(self):
+        node = netns.Node(debug = 1)
+        dummyname = "dummy%d" % os.getpid()
+        self.assertEquals(
+                os.system("ip link add name %s type dummy" % dummyname), 0)
+        devs = get_devs()
+        self.assertTrue(dummyname in devs)
+        dummyidx = devs[dummyname]['idx']
+
+        self.cleanup += [(dummyidx, None)]
+
+        # Move manually
+#        import pdb; pdb.set_trace()
+        netns.iproute.change_netns(dummyidx, node.pid)
+        self.cleanup.remove((dummyidx, None))
+        self.cleanup += [(dummyidx, node)]
+
+        node_devs = dict([(i.index, i) for i in node.get_interfaces()])
+        self.assertTrue(devs[dummyname]['idx'] in node_devs)
+
+        if0 = node_devs[devs[dummyname]['idx']]
+        if0.lladdr = '42:71:e0:90:ca:43'
+        if0.mtu = 1400
+
+        devs = get_devs_netns(node)
+        self.assertTrue(if0.name in devs)
+        self.assertEquals(devs[if0.name]['lladdr'], if0.lladdr)
+        self.assertEquals(devs[if0.name]['mtu'], if0.mtu)
+
+    def tearDown(self):
+        for (i, n) in self.cleanup:
+            if n:
+                j = [j for j in n.get_interfaces() if j.index == i][0]
+                n.del_if(j)
+                n._slave.change_netns(i, os.getpid())
+            iface = netns.iproute.get_if(i)
+            #os.system("ip link del %s" % iface.name)
 
 # FIXME: Links
 
