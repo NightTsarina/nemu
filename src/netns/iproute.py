@@ -163,18 +163,18 @@ def get_addr_data():
 def _parse_ip_addr(line):
     match = re.search(r'^inet ([0-9.]+)/(\d+)(?: brd ([0-9.]+))?', line)
     if match != None:
-        return ipv4address(
+        return netns.interface.ipv4address(
                 address     = match.group(1),
                 prefix_len  = match.group(2),
                 broadcast   = match.group(3))
 
-        match = re.search(r'^inet6 ([0-9a-f:]+)/(\d+)', line)
+    match = re.search(r'^inet6 ([0-9a-f:]+)/(\d+)', line)
     if match != None:
-        return ipv6address(
+        return netns.interface.ipv6address(
                 address     = match.group(1),
                 prefix_len  = match.group(2))
 
-        raise RuntimeError("Problems parsing ip command output")
+    raise RuntimeError("Problems parsing ip command output")
 
 def add_addr(iface, address):
     ifname = _get_if_name(iface)
@@ -219,37 +219,48 @@ def set_addr(iface, addresses, recover = True):
                 raise
 
 # Bridge handling
-
-def get_br_data():
-    # brctl stinks too much; it is better to directly use sysfs, it is probably
-    # stable by now
+def _sysfs_read_br(brname):
     def readval(fname):
         f = file(fname)
         return f.readline().strip()
 
+    p = '/sys/class/net/%s/bridge/' % brname
+    p2 = '/sys/class/net/%s/brif/' % brname
+    try:
+        os.stat(p)
+    except:
+        return None
+    return dict(
+            stp             = readval(p + 'stp_state'),
+            forward_delay   = float(readval(p + 'forward_delay')) / 100,
+            hello_time      = float(readval(p + 'hello_time')) / 100,
+            ageing_time     = float(readval(p + 'ageing_time')) / 100,
+            max_age         = float(readval(p + 'max_age')) / 100,
+            ports           = os.listdir(p2))
+
+def get_bridge_data():
+    # brctl stinks too much; it is better to directly use sysfs, it is probably
+    # stable by now
     byidx = {}
     bynam = {}
     ports = {}
     ifdata = get_if_data()
-    for i in ifdata[1]: # by name
-        p = '/sys/class/net/%s/bridge/' % i
-        p2 = '/sys/class/net/%s/brif/' % i
-        try:
-            os.stat(p)
-        except:
+    for iface in ifdata[0].values():
+        brdata = _sysfs_read_br(iface.name)
+        if brdata == None:
             continue
-        params = dict(
-                stp             = readval(p + 'stp_state'),
-                forward_delay   = float(readval(p + 'forward_delay')) / 100,
-                hello_time      = float(readval(p + 'hello_time')) / 100,
-                ageing_time     = float(readval(p + 'ageing_time')) / 100,
-                max_age         = float(readval(p + 'max_age')) / 100)
-        iface = ifdata[1][i]
-        bynam[i] = byidx[iface.index] = netns.interface.bridge.upgrade(
-                iface, **params)
-        ports[iface.index] = [ifdata[1][x].index for x in os.listdir(p2)]
-
+        ports[iface.index] = [ifdata[1][x].index for x in brdata['ports']]
+        del brdata['ports']
+        bynam[iface.name] = byidx[iface.index] = \
+                netns.interface.bridge.upgrade(iface, **brdata)
     return byidx, bynam, ports
+
+def get_bridge(br):
+    iface = get_if(br)
+    brdata = _sysfs_read_br(iface.name)
+    #ports = [ifdata[1][x].index for x in brdata['ports']]
+    del brdata['ports']
+    return netns.interface.bridge.upgrade(iface, **brdata)
 
 def create_bridge(br):
     if isinstance(br, str):
@@ -286,7 +297,7 @@ def set_bridge(br, recover = True):
                     set_if(orig_br, recover = False) # rollback
                     raise
 
-    orig_br = get_br_data()[1][_get_if_name(br)]
+    orig_br = get_bridge(br)
     diff = br - orig_br # Only set what's needed
 
     cmds = []
@@ -302,7 +313,8 @@ def set_bridge(br, recover = True):
         cmds.append(('max_age', int(diff.max_age)))
 
     set_if(diff)
-    do_cmds('/sys/class/net/%s/bridge/' % br.name, cmds, orig_br)
+    name = diff.name if diff.name != None else orig_br.name
+    do_cmds('/sys/class/net/%s/bridge/' % name, cmds, orig_br)
 
 def add_bridge_port(br, iface):
     ifname = _get_if_name(iface)

@@ -23,7 +23,6 @@ class Interface(object):
         return "NETNSif-%.4x%.3x" % (os.getpid(), n)
 
     def __init__(self, index):
-        self._changeable_attributes = interface.changeable_attributes
         self._idx = index
 
     def __del__(self):
@@ -52,27 +51,11 @@ class NSInterface(Interface):
 
     # some black magic to automatically get/set interface attributes
     def __getattr__(self, name):
-        try:
-            ca = object.__getattr__(self, '_changeable_attributes')
-        except:
-            ca = []
-        if (name not in ca):
-            raise AttributeError("'%s' object has no attribute '%s'" %
-                    (self.__class__.__name__, name))
-        # I can use attributes now, as long as they are not in
-        # changeable_attributes
         iface = self._slave.get_if_data(self.index)
         return getattr(iface, name)
 
     def __setattr__(self, name, value):
-        try:
-            ca = object.__getattr__(self, '_changeable_attributes')
-        except:
-            ca = []
-        if (name not in ca):
-            if name[0] != '_': # forbid anything that doesn't start with a _
-                raise AttributeError("'%s' object has no attribute '%s'" %
-                        (self.__class__.__name__, name))
+        if name[0] == '_': # forbid anything that doesn't start with a _
             super(Interface, self).__setattr__(name, value)
             return
         iface = interface(index = self.index)
@@ -208,28 +191,12 @@ class ExternalInterface(Interface):
 
     # some black magic to automatically get/set interface attributes
     def __getattr__(self, name):
-        try:
-            ca = object.__getattr__(self, '_changeable_attributes')
-        except:
-            ca = []
-        if (name not in ca):
-            raise AttributeError("'%s' object has no attribute '%s'" %
-                    (self.__class__.__name__, name))
-        # I can use attributes now, as long as they are not in
-        # changeable_attributes
         iface = netns.iproute.get_if(self.index)
         return getattr(iface, name)
 
     def __setattr__(self, name, value):
-        try:
-            ca = object.__getattr__(self, '_changeable_attributes')
-        except:
-            ca = []
-        if (name not in ca):
-            if name[0] != '_': # forbid anything that doesn't start with a _
-                raise AttributeError("'%s' object has no attribute '%s'" %
-                        (self.__class__.__name__, name))
-            super(Interface, self).__setattr__(name, value)
+        if name[0] == '_': # forbid anything that doesn't start with a _
+            super(ExternalInterface, self).__setattr__(name, value)
             return
         iface = interface(index = self.index)
         setattr(iface, name, value)
@@ -319,10 +286,24 @@ class Link(ExternalInterface):
 
         iface = netns.iproute.create_bridge(self._gen_br_name())
         super(Link, self).__init__(iface.index)
-        self._changeable_attributes = bridge.changeable_attributes
 
         self._ports = set()
-        # register somewhere
+        # FIXME: is this correct/desirable/etc?
+        self.stp = False
+        self.forward_delay = 0
+        # FIXME: register somewhere
+
+    def __getattr__(self, name):
+        iface = netns.iproute.get_bridge(self.index)
+        return getattr(iface, name)
+
+    def __setattr__(self, name, value):
+        if name[0] == '_': # forbid anything that doesn't start with a _
+            super(ExternalInterface, self).__setattr__(name, value)
+            return
+        iface = bridge(index = self.index)
+        setattr(iface, name, value)
+        return netns.iproute.set_bridge(iface)
 
     def __del__(self):
         self.destroy()

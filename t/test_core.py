@@ -59,9 +59,8 @@ class TestGlobal(unittest.TestCase):
         i2.add_v4_address('10.0.0.2', 24)
 
         null = file('/dev/null', 'wb')
-        # the bridge seems to be quite slow!
-        a1 = n1.Popen(['ping', '-qc1', '-w20', '10.0.0.2'], stdout = null)
-        a2 = n2.Popen(['ping', '-qc1', '-w20', '10.0.0.1'], stdout = null)
+        a1 = n1.Popen(['ping', '-qc1', '10.0.0.2'], stdout = null)
+        a2 = n2.Popen(['ping', '-qc1', '10.0.0.1'], stdout = null)
         self.assertEquals(a1.wait(), 0)
         self.assertEquals(a2.wait(), 0)
 
