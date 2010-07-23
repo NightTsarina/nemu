@@ -23,6 +23,7 @@ class Interface(object):
         return "NETNSif-%.4x%.3x" % (os.getpid(), n)
 
     def __init__(self, index):
+        self._changeable_attributes = interface.changeable_attributes
         self._idx = index
 
     def __del__(self):
@@ -51,7 +52,11 @@ class NSInterface(Interface):
 
     # some black magic to automatically get/set interface attributes
     def __getattr__(self, name):
-        if (name not in interface.changeable_attributes):
+        try:
+            ca = object.__getattr__(self, '_changeable_attributes')
+        except:
+            ca = []
+        if (name not in ca):
             raise AttributeError("'%s' object has no attribute '%s'" %
                     (self.__class__.__name__, name))
         # I can use attributes now, as long as they are not in
@@ -60,7 +65,11 @@ class NSInterface(Interface):
         return getattr(iface, name)
 
     def __setattr__(self, name, value):
-        if (name not in interface.changeable_attributes):
+        try:
+            ca = object.__getattr__(self, '_changeable_attributes')
+        except:
+            ca = []
+        if (name not in ca):
             if name[0] != '_': # forbid anything that doesn't start with a _
                 raise AttributeError("'%s' object has no attribute '%s'" %
                         (self.__class__.__name__, name))
@@ -199,7 +208,11 @@ class ExternalInterface(Interface):
 
     # some black magic to automatically get/set interface attributes
     def __getattr__(self, name):
-        if (name not in interface.changeable_attributes):
+        try:
+            ca = object.__getattr__(self, '_changeable_attributes')
+        except:
+            ca = []
+        if (name not in ca):
             raise AttributeError("'%s' object has no attribute '%s'" %
                     (self.__class__.__name__, name))
         # I can use attributes now, as long as they are not in
@@ -208,7 +221,11 @@ class ExternalInterface(Interface):
         return getattr(iface, name)
 
     def __setattr__(self, name, value):
-        if (name not in interface.changeable_attributes):
+        try:
+            ca = object.__getattr__(self, '_changeable_attributes')
+        except:
+            ca = []
+        if (name not in ca):
             if name[0] != '_': # forbid anything that doesn't start with a _
                 raise AttributeError("'%s' object has no attribute '%s'" %
                         (self.__class__.__name__, name))
@@ -302,6 +319,7 @@ class Link(ExternalInterface):
 
         iface = netns.iproute.create_bridge(self._gen_br_name())
         super(Link, self).__init__(iface.index)
+        self._changeable_attributes = bridge.changeable_attributes
 
         self._ports = set()
         # register somewhere
@@ -391,22 +409,6 @@ def _make_setter(attr, conv = lambda x: x):
 class interface(object):
     """Class for internal use. It is mostly a data container used to easily
     pass information around; with some convenience methods."""
-    @classmethod
-    def parse_ip(cls, line):
-        """Parse a line of ouput from `ip -o link list' and construct and
-        return a new object with the data."""
-        match = re.search(r'^(\d+): (\S+): <(\S+)> mtu (\d+) qdisc \S+' +
-                r'.*link/\S+ ([0-9a-f:]+) brd ([0-9a-f:]+)', line)
-        flags = match.group(3).split(",")
-        return cls(
-                index   = match.group(1),
-                name    = match.group(2),
-                up      = "UP" in flags,
-                mtu     = match.group(4),
-                lladdr  = match.group(5),
-                arp     = not ("NOARP" in flags),
-                broadcast = match.group(6),
-                multicast = "MULTICAST" in flags)
 
     # information for other parts of the code
     changeable_attributes = ["name", "mtu", "lladdr", "broadcast", "up",
@@ -423,14 +425,14 @@ class interface(object):
 
     def __init__(self, index = None, name = None, up = None, mtu = None,
             lladdr = None, broadcast = None, multicast = None, arp = None):
-        self._index = _positive(index) if index is not None else None
-        self.name = name
-        self.up = up
-        self.mtu = mtu
-        self.lladdr = lladdr
-        self.broadcast = broadcast
-        self.multicast = multicast
-        self.arp = arp
+        self._index     = _positive(index) if index is not None else None
+        self.name       = name
+        self.up         = up
+        self.mtu        = mtu
+        self.lladdr     = lladdr
+        self.broadcast  = broadcast
+        self.multicast  = multicast
+        self.arp        = arp
 
     def __repr__(self):
         s = "%s.%s(index = %s, name = %s, up = %s, mtu = %s, lladdr = %s, "
@@ -445,40 +447,81 @@ class interface(object):
         """Compare attributes and return a new object with just the attributes
         that differ set (with the value they have in the first operand). The
         index remains equal to the first operand."""
-        name = None if self.name == o.name else self.name
-        up = None if self.up == o.up else self.up
-        mtu = None if self.mtu == o.mtu else self.mtu
-        lladdr = None if self.lladdr == o.lladdr else self.lladdr
-        broadcast = None if self.broadcast == o.broadcast else self.broadcast
-        multicast = None if self.multicast == o.multicast else self.multicast
-        arp = None if self.arp == o.arp else self.arp
+        name        = None if self.name == o.name else self.name
+        up          = None if self.up == o.up else self.up
+        mtu         = None if self.mtu == o.mtu else self.mtu
+        lladdr      = None if self.lladdr == o.lladdr else self.lladdr
+        broadcast   = None if self.broadcast == o.broadcast else self.broadcast
+        multicast   = None if self.multicast == o.multicast else self.multicast
+        arp         = None if self.arp == o.arp else self.arp
         return self.__class__(self.index, name, up, mtu, lladdr, broadcast,
                 multicast, arp)
+
+class bridge(interface):
+    changeable_attributes = interface.changeable_attributes + ["stp",
+            "forward_delay", "hello_time", "ageing_time", "max_age"]
+
+    # Index should be read-only
+    stp = property(_make_getter("_stp"), _make_setter("_stp", _any_to_bool))
+    forward_delay = property(_make_getter("_forward_delay"),
+            _make_setter("_forward_delay", float))
+    hello_time = property(_make_getter("_hello_time"),
+            _make_setter("_hello_time", float))
+    ageing_time = property(_make_getter("_ageing_time"),
+            _make_setter("_ageing_time", float))
+    max_age = property(_make_getter("_max_age"),
+            _make_setter("_max_age", float))
+
+    @classmethod
+    def upgrade(cls, iface, *kargs, **kwargs):
+        """Upgrade a interface to a bridge."""
+        return cls(iface.index, iface.name, iface.up, iface.mtu, iface.lladdr,
+                iface.broadcast, iface.multicast, iface.arp, *kargs, **kwargs)
+
+    def __init__(self, index = None, name = None, up = None, mtu = None,
+            lladdr = None, broadcast = None, multicast = None, arp = None,
+            stp = None, forward_delay = None, hello_time = None,
+            ageing_time = None, max_age = None):
+        super(bridge, self).__init__(index, name, up, mtu, lladdr, broadcast,
+                multicast, arp)
+        self.stp            = stp
+        self.forward_delay  = forward_delay
+        self.hello_time     = hello_time
+        self.ageing_time    = ageing_time
+        self.max_age        = max_age
+
+    def __repr__(self):
+        s = "%s.%s(index = %s, name = %s, up = %s, mtu = %s, lladdr = %s, "
+        s += "broadcast = %s, multicast = %s, arp = %s, stp = %s, "
+        s += "forward_delay = %s, hello_time = %s, ageing_time = %s, "
+        s += "max_age = %s)"
+        return s % (self.__module__, self.__class__.__name__,
+                self.index.__repr__(), self.name.__repr__(),
+                self.up.__repr__(), self.mtu.__repr__(),
+                self.lladdr.__repr__(), self.broadcast.__repr__(),
+                self.multicast.__repr__(), self.arp.__repr__(),
+                self.stp.__repr__(), self.forward_delay.__repr__(),
+                self.hello_time.__repr__(), self.ageing_time.__repr__(),
+                self.max_age.__repr__())
+
+    def __sub__(self, o):
+        r = super(bridge, self).__sub__(o)
+        if type(o) == interface:
+            return r
+        r.stp           = None if self.stp == o.stp else self.stp
+        r.hello_time    = None if self.hello_time == o.hello_time else \
+                self.hello_time
+        r.forward_delay = None if self.forward_delay == o.forward_delay else \
+                self.forward_delay
+        r.ageing_time   = None if self.ageing_time == o.ageing_time else \
+                self.ageing_time
+        r.max_age       = None if self.max_age == o.max_age else self.max_age
+        return r
 
 class address(object):
     """Class for internal use. It is mostly a data container used to easily
     pass information around; with some convenience methods. __eq__ and __hash__
     are defined just to be able to easily find duplicated addresses."""
-    @classmethod
-    def parse_ip(cls, line):
-        """Parse a line of ouput from `ip -o addr list' (after trimming the
-        index and interface name) and construct and return a new object with
-        the data."""
-        match = re.search(r'^inet ([0-9.]+)/(\d+)(?: brd ([0-9.]+))?', line)
-        if match != None:
-            return ipv4address(
-                address     = match.group(1),
-                prefix_len  = match.group(2),
-                broadcast   = match.group(3))
-
-        match = re.search(r'^inet6 ([0-9a-f:]+)/(\d+)', line)
-        if match != None:
-            return ipv6address(
-                address     = match.group(1),
-                prefix_len  = match.group(2))
-
-        raise RuntimeError("Problems parsing ip command output")
-
     # broadcast is not taken into account for differentiating addresses
     def __eq__(self, o):
         if not isinstance(o, address):
