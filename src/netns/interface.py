@@ -315,11 +315,14 @@ class Link(ExternalInterface):
                 self.disconnect(p)
             except:
                 pass
+        self.up = False
         netns.iproute.del_bridge(self.index)
 
     def connect(self, iface):
         assert iface.control.index not in self._ports
         netns.iproute.add_bridge_port(self.index, iface.control.index)
+        # FIXME: up/down, mtu, etc should be automatically propagated?
+        iface.control.up = True
         self._ports.add(iface.control.index)
 
     def disconnect(self, iface):

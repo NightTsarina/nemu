@@ -44,5 +44,26 @@ class TestGlobal(unittest.TestCase):
         self.assertEquals(a1.wait(), 0)
         self.assertEquals(a2.wait(), 0)
 
+    @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
+    def test_run_ping_bridging(self):
+        n1 = netns.Node()
+        n2 = netns.Node()
+        i1 = n1.add_if()
+        i2 = n2.add_if()
+        i1.up = i2.up = True
+        l = netns.Link()
+        l.connect(i1)
+        l.connect(i2)
+        l.up = True
+        i1.add_v4_address('10.0.0.1', 24)
+        i2.add_v4_address('10.0.0.2', 24)
+
+        null = file('/dev/null', 'wb')
+        # the bridge seems to be quite slow!
+        a1 = n1.Popen(['ping', '-qc1', '-w20', '10.0.0.2'], stdout = null)
+        a2 = n2.Popen(['ping', '-qc1', '-w20', '10.0.0.1'], stdout = null)
+        self.assertEquals(a1.wait(), 0)
+        self.assertEquals(a2.wait(), 0)
+
 if __name__ == '__main__':
     unittest.main()
