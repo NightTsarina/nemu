@@ -1,6 +1,6 @@
 # vim:ts=4:sw=4:et:ai:sts=4
 
-import os, re, socket, weakref
+import os
 import netns.iproute
 
 __all__ = ['NodeInterface', 'P2PInterface', 'ForeignInterface',

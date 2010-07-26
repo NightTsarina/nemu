@@ -1,6 +1,6 @@
 # vim:ts=4:sw=4:et:ai:sts=4
 
-import os, re, subprocess, sys
+import os, re, socket, subprocess, sys
 
 # helpers
 def _any_to_bool(any):
