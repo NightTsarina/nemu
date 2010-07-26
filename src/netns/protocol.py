@@ -8,7 +8,7 @@ except ImportError:
     from yaml import Loader, Dumper
 
 import base64, os, passfd, re, signal, sys, traceback, unshare, yaml
-import netns.subprocess_, netns.iproute, netns.interface
+import netns.subprocess_, netns.iproute
 
 # ============================================================================
 # Server-side protocol implementation
@@ -339,7 +339,7 @@ class Server(object):
         for i in range(len(args) / 2):
             d[str(args[i * 2])] = args[i * 2 + 1]
 
-        iface = netns.interface.interface(**d)
+        iface = netns.iproute.interface(**d)
         netns.iproute.set_if(iface)
         self.reply(200, "Done.")
 
@@ -360,17 +360,17 @@ class Server(object):
 
     def do_ADDR_ADD(self, cmdname, ifnr, address, prefixlen, broadcast = None):
         if address.find(":") < 0: # crude, I know
-            a = netns.interface.ipv4address(address, prefixlen, broadcast)
+            a = netns.iproute.ipv4address(address, prefixlen, broadcast)
         else:
-            a = netns.interface.ipv6address(address, prefixlen)
+            a = netns.iproute.ipv6address(address, prefixlen)
         netns.iproute.add_addr(ifnr, a)
         self.reply(200, "Done.")
 
     def do_ADDR_DEL(self, cmdname, ifnr, address, prefixlen):
         if address.find(":") < 0: # crude, I know
-            a = netns.interface.ipv4address(address, prefixlen, None)
+            a = netns.iproute.ipv4address(address, prefixlen, None)
         else:
-            a = netns.interface.ipv6address(address, prefixlen)
+            a = netns.iproute.ipv6address(address, prefixlen)
         netns.iproute.del_addr(ifnr, a)
         self.reply(200, "Done.")
 
