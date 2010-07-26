@@ -550,6 +550,7 @@ def del_bridge_port(br, iface):
     _execute(['brctl', 'delif', brname, ifname])
 
 def get_all_route_data():
+    # FIXME: should be two calls or something else...
     ipcmd = subprocess.Popen(["ip", "-o", "route", "list", "table", "all"],
         stdout = subprocess.PIPE)
     ipdata = ipcmd.communicate()[0]
@@ -565,11 +566,37 @@ def get_all_route_data():
                 r'(\S+)(?: via (\S+))? dev (\S+)', line)
         if not match:
             raise RuntimeError("Invalid output from `ip route'")
-        type = match.group(1) or 'unicast'
+        tipe = match.group(1) or 'unicast'
         prefix = match.group(2)
         nexthop = match.group(3)
         device = ifdata[match.group(4)]
         if prefix == 'default' or re.search(r'/0$', prefix):
             prefix = None
-        ret.append((type, prefix, nexthop, device))
+        ret.append((tipe, prefix, nexthop, device))
     return ret
+
+def get_route_data():
+    # filter out non-unicast routes
+    return [x for x in get_all_route_data() if x[0] == 'unicast']
+
+def del_route(tipe, prefix, nexthop, device):
+    _add_del_route('del', tipe, prefix, nexthop, device)
+
+def add_route(tipe, prefix, nexthop, device):
+    _add_del_route('add', tipe, prefix, nexthop, device)
+
+def _add_del_route(action, tipe, prefix, nexthop, device):
+    cmd = ['ip', 'route', action]
+    if device:
+        device = _get_if_name(device)
+    if tipe and tipe != 'unicast':
+        cmd += [tipe]
+    if prefix:
+        cmd += [prefix]
+    else:
+        cmd += ['default']
+    if nexthop:
+        cmd += ['via', nexthop]
+    if device:
+        cmd += ['dev', device]
+    _execute(cmd)
