@@ -549,3 +549,27 @@ def del_bridge_port(br, iface):
     brname = _get_if_name(br)
     _execute(['brctl', 'delif', brname, ifname])
 
+def get_all_route_data():
+    ipcmd = subprocess.Popen(["ip", "-o", "route", "list", "table", "all"],
+        stdout = subprocess.PIPE)
+    ipdata = ipcmd.communicate()[0]
+    assert ipcmd.wait() == 0
+
+    ifdata = get_if_data()[1]
+    ret = []
+    for line in ipdata.split("\n"):
+        if line == "":
+            continue
+        match = re.match(r'(?:(unicast|local|broadcast|multicast|throw|' +
+                r'unreachable|prohibit|blackhole|nat) )?' +
+                r'(\S+)(?: via (\S+))? dev (\S+)', line)
+        if not match:
+            raise RuntimeError("Invalid output from `ip route'")
+        type = match.group(1) or 'unicast'
+        prefix = match.group(2)
+        nexthop = match.group(3)
+        device = ifdata[match.group(4)]
+        if prefix == 'default' or re.search(r'/0$', prefix):
+            prefix = None
+        ret.append((type, prefix, nexthop, device))
+    return ret
