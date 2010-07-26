@@ -119,8 +119,10 @@ class TestWithDummy(unittest.TestCase):
     def setUp(self):
         self.cleanup = []
 
-    #@test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
-    @test_util.skip("Test trigger a kernel bug on 2.6.34")
+    @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
+    @test_util.skipUnless(
+            test_util.get_linux_ver() >= test_util.make_linux_ver("2.6.35"),
+            "Test trigger a kernel bug on 2.6.34")
     def test_interface_migration(self):
         node = netns.Node()
         dummyname = "dummy%d" % os.getpid()

@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # vim:ts=4:sw=4:et:ai:sts=4
 
-import re, subprocess, sys
+import os, re, subprocess, sys
 import netns.subprocess_
 
 def process_ipcmd(str):
@@ -61,6 +61,14 @@ def get_devs():
 def get_devs_netns(node):
     out = netns.subprocess_.backticks_raise(node, ["ip", "addr", "list"])
     return process_ipcmd(out)
+
+def make_linux_ver(string):
+    match = re.match(r'(\d+)\.(\d+)\.(\d+)(.*)', string)
+    version, patchlevel, sublevel, extraversion = match.groups()
+    return (int(version) << 16) + (int(patchlevel) << 8) + int(sublevel)
+
+def get_linux_ver():
+    return make_linux_ver(os.uname()[2])
 
 # Unittest from Python 2.6 doesn't have these decorators
 def _bannerwrap(f, text):
