@@ -550,10 +550,14 @@ def del_bridge_port(br, iface):
     _execute(['brctl', 'delif', brname, ifname])
 
 def get_all_route_data():
-    # FIXME: should be two calls or something else...
-    ipcmd = subprocess.Popen(["ip", "-o", "route", "list", "table", "all"],
+    #ipcmd = subprocess.Popen(["ip", "-o", "route", "list", "table", "all"],
+    ipcmd = subprocess.Popen(["ip", "-o", "route", "list"],
         stdout = subprocess.PIPE)
     ipdata = ipcmd.communicate()[0]
+    assert ipcmd.wait() == 0
+    ipcmd = subprocess.Popen(["ip", "-o", "-f", "inet6", "route", "list"],
+        stdout = subprocess.PIPE)
+    ipdata += ipcmd.communicate()[0]
     assert ipcmd.wait() == 0
 
     ifdata = get_if_data()[1]
