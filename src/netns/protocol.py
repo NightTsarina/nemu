@@ -537,7 +537,6 @@ class Client(object):
         else:
             self._send_cmd("IF", "LIST")
         data = self._read_and_check_reply()
-        data = data.partition("\n")[2] # ignore first line
         return yaml.load(data)
 
     def set_if(self, interface):
