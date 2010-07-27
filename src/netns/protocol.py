@@ -37,8 +37,8 @@ _proto_commands = {
             },
         "ROUT": {
             "LIST": ("", ""),
-            "ADD":  ("ssisi", ""),
-            "DEL":  ("ssisi", "")
+            "ADD":  ("bbibi", ""),
+            "DEL":  ("bbibi", "")
             },
         "PROC": {
             "CRTE": ("b", "b*"),
@@ -381,9 +381,11 @@ class Server(object):
 
     def do_ROUT_ADD(self, cmdname, tipe, prefix, prefixlen, nexthop, ifnr):
         netns.iproute.add_route(tipe, prefix, prefixlen, nexthop, ifnr)
+        self.reply(200, "Done.")
 
     def do_ROUT_DEL(self, cmdname, tipe, prefix, prefixlen, nexthop, ifnr):
         netns.iproute.del_route(tipe, prefix, prefixlen, nexthop, ifnr)
+        self.reply(200, "Done.")
 
 # ============================================================================
 #
@@ -579,6 +581,32 @@ class Client(object):
         self._send_cmd("ADDR", "DEL", ifnr, address.address, address.prefix_len)
         self._read_and_check_reply()
 
+    def get_route_data(self):
+        self._send_cmd("ROUT", "LIST")
+        data = self._read_and_check_reply()
+        return yaml.load(data)
+
+    def add_route(self,tipe, prefix, prefix_len, nexthop, ifnr): 
+        _add_del_route("ADD", tipe, prefix, prefix_len, nexthop, ifnr)
+
+    def del_route(self, tipe, prefix, prefix_len, nexthop, ifnr):
+        _add_del_route("DEL", tipe, prefix, prefix_len, nexthop, ifnr)
+
+    def _add_del_route(self, action, tipe, prefix, prefix_len, nexthop, ifnr):
+        if not tipe:
+            tipe = 'unicast'
+        if not prefix:
+            prefix = ''
+            prefix_len = 0
+        if not nexthop:
+            nexthop = ''
+        if not ifnr:
+            ifnr = 0
+        args = ["ROUT", action, tipe, prefix, prefix_len, nexthop, ifnr]
+        args[2:6] = map(_b64, args[2:6])
+        self._send_cmd(args)
+        self._read_and_check_reply()
+ 
 def _b64(text):
     text = str(text)
     if len(text) == 0 or filter(lambda x: ord(x) <= ord(" ") or
