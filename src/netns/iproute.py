@@ -576,27 +576,30 @@ def get_all_route_data():
         device = ifdata[match.group(4)]
         if prefix == 'default' or re.search(r'/0$', prefix):
             prefix = None
-        ret.append((tipe, prefix, nexthop, device))
+            prefix_len = 0
+        else:
+            prefix, foo, prefix_len = prefix.partition('/')
+        ret.append((tipe, prefix, int(prefix_len), nexthop, device))
     return ret
 
 def get_route_data():
     # filter out non-unicast routes
     return [x for x in get_all_route_data() if x[0] == 'unicast']
 
-def del_route(tipe, prefix, nexthop, device):
-    _add_del_route('del', tipe, prefix, nexthop, device)
+def del_route(tipe, prefix, prefix_len, nexthop, device):
+    _add_del_route('del', tipe, prefix, prefix_len, nexthop, device)
 
-def add_route(tipe, prefix, nexthop, device):
-    _add_del_route('add', tipe, prefix, nexthop, device)
+def add_route(tipe, prefix, prefix_len, nexthop, device):
+    _add_del_route('add', tipe, prefix, prefix_len, nexthop, device)
 
-def _add_del_route(action, tipe, prefix, nexthop, device):
+def _add_del_route(action, tipe, prefix, prefix_len, nexthop, device):
     cmd = ['ip', 'route', action]
     if device:
         device = _get_if_name(device)
     if tipe and tipe != 'unicast':
         cmd += [tipe]
     if prefix:
-        cmd += [prefix]
+        cmd += ["%s/%d" % (prefix, prefix_len)]
     else:
         cmd += ['default']
     if nexthop:

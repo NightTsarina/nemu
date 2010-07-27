@@ -37,8 +37,8 @@ _proto_commands = {
             },
         "ROUT": {
             "LIST": ("", ""),
-            "ADD":  ("sisi", ""),
-            "DEL":  ("sisi", "")
+            "ADD":  ("ssisi", ""),
+            "DEL":  ("ssisi", "")
             },
         "PROC": {
             "CRTE": ("b", "b*"),
@@ -374,9 +374,16 @@ class Server(object):
         netns.iproute.del_addr(ifnr, a)
         self.reply(200, "Done.")
 
-#    def do_ROUT_LIST(self, cmdname):
-#    def do_ROUT_ADD(self, cmdname, prefix, prefixlen, nexthop, ifnr):
-#    def do_ROUT_DEL(self, cmdname, prefix, prefixlen, nexthop, ifnr):
+    def do_ROUT_LIST(self, cmdname):
+        netns.iproute.get_route_data()
+        self.reply(200, ["# Routing data follows."] +
+                yaml.dump(addrdata).split("\n"))
+
+    def do_ROUT_ADD(self, cmdname, tipe, prefix, prefixlen, nexthop, ifnr):
+        netns.iproute.add_route(tipe, prefix, prefixlen, nexthop, ifnr)
+
+    def do_ROUT_DEL(self, cmdname, tipe, prefix, prefixlen, nexthop, ifnr):
+        netns.iproute.del_route(tipe, prefix, prefixlen, nexthop, ifnr)
 
 # ============================================================================
 #
