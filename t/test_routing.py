@@ -5,6 +5,14 @@ import netns, test_util
 import os, unittest
 
 class TestRouting(unittest.TestCase):
+    def test_base_routing(self):
+        node = netns.Node(nonetns = True)
+        routes = node.get_routes()
+        if(len(routes)):
+            self.assertRaises(ValueError, node.add_route, routes[0])
+            routes[0].device += 1 # should be enough to make it unique
+            self.assertRaises(ValueError, node.del_route, routes[0])
+
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_routing(self):
         node = netns.Node()

@@ -85,8 +85,8 @@ class Node(object):
 
     def del_if(self, iface):
         """Doesn't destroy the interface if it wasn't created by us."""
-        del self._interfaces[iface.index]
         iface.destroy()
+        del self._interfaces[iface.index]
 
     def get_interfaces(self):
         ifaces = self._slave.get_if_data()
@@ -105,13 +105,23 @@ class Node(object):
 
         return sorted(ret, key = lambda x: x.index)
 
-    # FIXME: Routing
-    def add_route(self, prefix, prefix_len, nexthop = None, interface = None):
-        assert nexthop or interface
-    def add_default_route(self, nexthop, interface = None):
-        return self.add_route('0.0.0.0', 0, nexthop, interface)
+    def add_route(self, *args, **kwargs):
+        # Accepts either a route object or all its constructor's parameters
+        if len(args) == 1 and not kwargs:
+            r = args[0]
+        else:
+            r = netns.iproute.route(*args, **kwargs)
+        return self._slave.add_route(r)
+
+    def del_route(self, *args, **kwargs):
+        if len(args) == 1 and not kwargs:
+            r = args[0]
+        else:
+            r = netns.iproute.route(*args, **kwargs)
+        return self._slave.del_route(r)
+
     def get_routes(self):
-        return set()
+        return self._slave.get_route_data()
 
 # Handle the creation of the child; parent gets (fd, pid), child creates and
 # runs a Server(); never returns.

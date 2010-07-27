@@ -24,6 +24,12 @@ def _positive(val):
         raise ValueError("Invalid value: %d" % v)
     return v
 
+def _non_empty_str(val):
+    if val == '':
+        return None
+    else:
+        return str(val)
+
 def _fix_lladdr(addr):
     foo = addr.lower()
     if ':' in addr:
@@ -209,7 +215,47 @@ class ipv6address(address):
         return s % (self.__module__, self.__class__.__name__,
                 self.address.__repr__(), self.prefix_len)
 
-# XXX: ideally this should be replaced by netlink communication
+class route(object):
+    tipes = ['unicast', 'local', 'broadcast', 'multicast', 'throw',
+            'unreachable', 'prohibit', 'blackhole', 'nat']
+
+    tipe = property(_make_getter("_tipe", tipes.__getitem__),
+            _make_setter("_tipe", tipes.index))
+    prefix = property(_make_getter("_prefix"),
+            _make_setter("_prefix", _non_empty_str))
+    prefix_len = property(_make_getter("_plen"),
+            _make_setter("_plen", int))
+    nexthop = property(_make_getter("_nexthop"),
+            _make_setter("_nexthop", _non_empty_str))
+    metric = property(_make_getter("_metric"),
+            _make_setter("_metric", int))
+    device = property(_make_getter("_device"),
+            _make_setter("_device", _positive))
+
+    def __init__(self, tipe = 'unicast', prefix = None, prefix_len = 0,
+            nexthop = None, device = None, metric = 0):
+        self.tipe = tipe
+        self.prefix = prefix
+        self.prefix_len = prefix_len
+        self.nexthop = nexthop
+        self.device = device
+        self.metric = metric
+        assert nexthop or device
+
+    def __repr__(self):
+        s = "%s.%s(tipe = %s, prefix = %s, prefix_len = %s, nexthop = %s, "
+        s += "device = %s, metric = %s)"
+        return s % (self.__module__, self.__class__.__name__,
+                self.tipe.__repr__(), self.prefix.__repr__(),
+                self.prefix_len.__repr__(), self.nexthop.__repr__(),
+                self.device.__repr__(), self.metric.__repr__())
+
+    def __eq__(self, o):
+        if not isinstance(o, route):
+            return False
+        return (self.tipe == o.tipe and self.prefix == o.prefix and
+                self.prefix_len == o.prefix_len and self.nexthop == o.nexthop
+                and self.device == o.device and self.metric == o.metric)
 
 # helpers
 def _execute(cmd):
@@ -228,6 +274,7 @@ def _get_if_name(iface):
         return iface
     return get_if(iface).name
 
+# XXX: ideally this should be replaced by netlink communication
 # Interface handling
 def get_if_data():
     """Gets current interface information. Returns a tuple (byidx, bynam) in
@@ -579,31 +626,33 @@ def get_all_route_data():
             prefix_len = 0
         else:
             prefix, foo, prefix_len = prefix.partition('/')
-        ret.append((tipe, prefix, int(prefix_len), nexthop, device))
+        ret.append(route(tipe, prefix, prefix_len, nexthop, device.index))
     return ret
 
 def get_route_data():
     # filter out non-unicast routes
-    return [x for x in get_all_route_data() if x[0] == 'unicast']
+    return [x for x in get_all_route_data() if x.tipe == 'unicast']
 
-def del_route(tipe, prefix, prefix_len, nexthop, device):
-    _add_del_route('del', tipe, prefix, prefix_len, nexthop, device)
+def add_route(route):
+    if route in get_all_route_data():
+        raise ValueError('Route already exists')
+    _add_del_route('add', route)
 
-def add_route(tipe, prefix, prefix_len, nexthop, device):
-    _add_del_route('add', tipe, prefix, prefix_len, nexthop, device)
+def del_route(route):
+    if route not in get_all_route_data():
+        raise ValueError('Route does not exist')
+    _add_del_route('del', route)
 
-def _add_del_route(action, tipe, prefix, prefix_len, nexthop, device):
+def _add_del_route(action, route):
     cmd = ['ip', 'route', action]
-    if device:
-        device = _get_if_name(device)
-    if tipe and tipe != 'unicast':
-        cmd += [tipe]
-    if prefix:
-        cmd += ["%s/%d" % (prefix, prefix_len)]
+    if route.tipe != 'unicast':
+        cmd += [route.tipe]
+    if route.prefix:
+        cmd += ["%s/%d" % (route.prefix, route.prefix_len)]
     else:
         cmd += ['default']
-    if nexthop:
-        cmd += ['via', nexthop]
-    if device:
-        cmd += ['dev', device]
+    if route.nexthop:
+        cmd += ['via', route.nexthop]
+    if route.device:
+        cmd += ['dev', _get_if_name(route.device)]
     _execute(cmd)
