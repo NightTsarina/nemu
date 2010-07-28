@@ -21,12 +21,15 @@ class Node(object):
         If keepns is true, the network name space is not created and can be run
         as a normal user, for testing. If debug is true, details of the
         communication protocol are printed on stderr."""
+        # Initialize attributes, in case something fails during __init__
+        self._pid = self._debug = self._slave = None
+        self._processes = weakref.WeakValueDictionary()
+        self._interfaces = weakref.WeakValueDictionary()
+
         fd, pid = _start_child(debug, nonetns)
         self._pid = pid
         self._debug = debug
         self._slave = netns.protocol.Client(fd, fd, debug)
-        self._processes = weakref.WeakValueDictionary()
-        self._interfaces = weakref.WeakValueDictionary()
 
         Node._nodes[Node._nextnode] = self
         Node._nextnode += 1
@@ -41,13 +44,15 @@ class Node(object):
             sys.stderr.write("*** Node(%s) destroy\n" % self.pid)
         for p in self._processes.values():
             p.destroy()
-        del self._processes
         # Use get_interfaces to force a rescan
         for i in self.get_interfaces():
             i.destroy()
+        if self._slave:
+            self._slave.shutdown()
+
+        del self._processes
         del self._interfaces
         del self._pid
-        self._slave.shutdown()
         del self._slave
 
     @property
@@ -89,6 +94,8 @@ class Node(object):
         iface.destroy()
 
     def get_interfaces(self):
+        if not self._slave:
+            return []
         ifaces = self._slave.get_if_data()
         ret = []
         for i in ifaces:
@@ -147,8 +154,8 @@ def _start_child(debug, nonetns):
         if not nonetns:
             # create new name space
             unshare.unshare(unshare.CLONE_NEWNET)
-        # Enable packet forwarding
-        netns.iproute._execute(['sysctl', '-w', 'net.ipv4.ip_forward=1'])
+            # Enable packet forwarding
+            netns.iproute._execute(['sysctl', '-w', 'net.ipv4.ip_forward=1'])
         # FIXME: ipv6?
         srv.run()
     except BaseException, e:
