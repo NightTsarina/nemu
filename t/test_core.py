@@ -19,7 +19,7 @@ class TestConfigure(unittest.TestCase):
 
 class TestGlobal(unittest.TestCase):
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
-    def test_run_ping(self):
+    def test_run_ping_p2pif(self):
         n1 = netns.Node()
         n2 = netns.Node()
         i1, i2 = netns.P2PInterface.create_pair(n1, n2)
@@ -45,7 +45,7 @@ class TestGlobal(unittest.TestCase):
         self.assertEquals(a2.wait(), 0)
 
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
-    def test_run_ping_bridging(self):
+    def test_run_ping_node_if(self):
         n1 = netns.Node()
         n2 = netns.Node()
         i1 = n1.add_if()
@@ -61,6 +61,37 @@ class TestGlobal(unittest.TestCase):
         null = file('/dev/null', 'wb')
         a1 = n1.Popen(['ping', '-qc1', '10.0.0.2'], stdout = null)
         a2 = n2.Popen(['ping', '-qc1', '10.0.0.1'], stdout = null)
+        self.assertEquals(a1.wait(), 0)
+        self.assertEquals(a2.wait(), 0)
+
+    @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
+    def test_run_ping_routing(self):
+        n1 = netns.Node()
+        n2 = netns.Node()
+        n3 = netns.Node()
+        i1 = n1.add_if()
+        i2a = n2.add_if()
+        i2b = n2.add_if()
+        i3 = n3.add_if()
+        i1.up = i2a.up = i2b.up = i3.up = True
+        l1 = netns.Link()
+        l2 = netns.Link()
+        l1.connect(i1)
+        l1.connect(i2a)
+        l2.connect(i2b)
+        l2.connect(i3)
+        l1.up = l2.up = True
+        i1.add_v4_address('10.0.0.1', 24)
+        i2a.add_v4_address('10.0.0.2', 24)
+        i2b.add_v4_address('10.0.1.1', 24)
+        i3.add_v4_address('10.0.1.2', 24)
+
+        n1.add_route(prefix = '10.0.1.0', prefix_len = 24, nexthop = '10.0.0.2')
+        n3.add_route(prefix = '10.0.0.0', prefix_len = 24, nexthop = '10.0.1.1')
+
+        null = file('/dev/null', 'wb')
+        a1 = n1.Popen(['ping', '-qc1', '10.0.1.2'], stdout = null)
+        a2 = n3.Popen(['ping', '-qc1', '10.0.0.1'], stdout = null)
         self.assertEquals(a1.wait(), 0)
         self.assertEquals(a2.wait(), 0)
 
