@@ -5,12 +5,13 @@ import netns, test_util
 import os, unittest
 
 class TestRouting(unittest.TestCase):
+    @test_util.skip("Programatic detection of duplicate routes not implemented")
     def test_base_routing(self):
         node = netns.Node(nonetns = True)
-        routes = node.get_routes()
+        routes = node.get_routes() # main netns routes!
         if(len(routes)):
             self.assertRaises(RuntimeError, node.add_route, routes[0])
-            routes[0].interface += 1 # should be enough to make it unique
+            routes[0].metric += 1 # should be enough to make it unique
             self.assertRaises(RuntimeError, node.del_route, routes[0])
 
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
