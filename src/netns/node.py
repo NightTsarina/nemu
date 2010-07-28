@@ -145,7 +145,11 @@ def _start_child(debug, nonetns):
         s0.close()
         srv = netns.protocol.Server(s1, s1, debug)
         if not nonetns:
+            # create new name space
             unshare.unshare(unshare.CLONE_NEWNET)
+        # Enable packet forwarding
+        netns.iproute._execute(['sysctl', '-w', 'net.ipv4.ip_forward=1'])
+        # FIXME: ipv6?
         srv.run()
     except BaseException, e:
         s = "Slave node aborting: %s\n" % str(e)
