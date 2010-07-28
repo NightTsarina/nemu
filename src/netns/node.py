@@ -85,8 +85,8 @@ class Node(object):
 
     def del_if(self, iface):
         """Doesn't destroy the interface if it wasn't created by us."""
-        iface.destroy()
         del self._interfaces[iface.index]
+        iface.destroy()
 
     def get_interfaces(self):
         ifaces = self._slave.get_if_data()
@@ -105,19 +105,24 @@ class Node(object):
 
         return sorted(ret, key = lambda x: x.index)
 
+    def route(self, tipe = 'unicast', prefix = None, prefix_len = 0,
+            nexthop = None, interface = None, metric = 0):
+        return netns.iproute.route(tipe, prefix, prefix_len, nexthop,
+                interface.index if interface else None, metric)
+
     def add_route(self, *args, **kwargs):
         # Accepts either a route object or all its constructor's parameters
         if len(args) == 1 and not kwargs:
             r = args[0]
         else:
-            r = netns.iproute.route(*args, **kwargs)
+            r = self.route(*args, **kwargs)
         return self._slave.add_route(r)
 
     def del_route(self, *args, **kwargs):
         if len(args) == 1 and not kwargs:
             r = args[0]
         else:
-            r = netns.iproute.route(*args, **kwargs)
+            r = self.route(*args, **kwargs)
         return self._slave.del_route(r)
 
     def get_routes(self):

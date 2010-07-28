@@ -224,38 +224,38 @@ class route(object):
     prefix = property(_make_getter("_prefix"),
             _make_setter("_prefix", _non_empty_str))
     prefix_len = property(_make_getter("_plen"),
-            _make_setter("_plen", int))
+            lambda s, v: setattr(s, '_plen', int(v or 0)))
     nexthop = property(_make_getter("_nexthop"),
             _make_setter("_nexthop", _non_empty_str))
+    interface = property(_make_getter("_interface"),
+            _make_setter("_interface", _positive))
     metric = property(_make_getter("_metric"),
-            _make_setter("_metric", int))
-    device = property(_make_getter("_device"),
-            _make_setter("_device", _positive))
+            lambda s, v: setattr(s, '_metric', int(v or 0)))
 
     def __init__(self, tipe = 'unicast', prefix = None, prefix_len = 0,
-            nexthop = None, device = None, metric = 0):
+            nexthop = None, interface = None, metric = 0):
         self.tipe = tipe
         self.prefix = prefix
         self.prefix_len = prefix_len
         self.nexthop = nexthop
-        self.device = device
+        self.interface = interface
         self.metric = metric
-        assert nexthop or device
+        assert nexthop or interface
 
     def __repr__(self):
         s = "%s.%s(tipe = %s, prefix = %s, prefix_len = %s, nexthop = %s, "
-        s += "device = %s, metric = %s)"
+        s += "interface = %s, metric = %s)"
         return s % (self.__module__, self.__class__.__name__,
                 self.tipe.__repr__(), self.prefix.__repr__(),
                 self.prefix_len.__repr__(), self.nexthop.__repr__(),
-                self.device.__repr__(), self.metric.__repr__())
+                self.interface.__repr__(), self.metric.__repr__())
 
     def __eq__(self, o):
         if not isinstance(o, route):
             return False
         return (self.tipe == o.tipe and self.prefix == o.prefix and
                 self.prefix_len == o.prefix_len and self.nexthop == o.nexthop
-                and self.device == o.device and self.metric == o.metric)
+                and self.interface == o.interface and self.metric == o.metric)
 
 # helpers
 def _execute(cmd):
@@ -614,19 +614,23 @@ def get_all_route_data():
             continue
         match = re.match(r'(?:(unicast|local|broadcast|multicast|throw|' +
                 r'unreachable|prohibit|blackhole|nat) )?' +
-                r'(\S+)(?: via (\S+))? dev (\S+)', line)
+                r'(\S+)(?: via (\S+))? dev (\S+).*(?: metric (\d+))?', line)
         if not match:
-            raise RuntimeError("Invalid output from `ip route'")
+            raise RuntimeError("Invalid output from `ip route': `%s'" % line)
         tipe = match.group(1) or 'unicast'
         prefix = match.group(2)
         nexthop = match.group(3)
-        device = ifdata[match.group(4)]
+        interface = ifdata[match.group(4)]
+        metric = match.group(5)
         if prefix == 'default' or re.search(r'/0$', prefix):
             prefix = None
             prefix_len = 0
         else:
-            prefix, foo, prefix_len = prefix.partition('/')
-        ret.append(route(tipe, prefix, prefix_len, nexthop, device.index))
+            match = re.match(r'([0-9a-f:.]+)(?:/(\d+))?$', prefix)
+            prefix = match.group(1)
+            prefix_len = int(match.group(2) or 32)
+        ret.append(route(tipe, prefix, prefix_len, nexthop, interface.index,
+            metric))
     return ret
 
 def get_route_data():
@@ -653,6 +657,6 @@ def _add_del_route(action, route):
         cmd += ['default']
     if route.nexthop:
         cmd += ['via', route.nexthop]
-    if route.device:
-        cmd += ['dev', _get_if_name(route.device)]
+    if route.interface:
+        cmd += ['dev', _get_if_name(route.interface)]
     _execute(cmd)

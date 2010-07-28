@@ -10,15 +10,20 @@ class TestRouting(unittest.TestCase):
         routes = node.get_routes()
         if(len(routes)):
             self.assertRaises(ValueError, node.add_route, routes[0])
-            routes[0].device += 1 # should be enough to make it unique
+            routes[0].interface += 1 # should be enough to make it unique
             self.assertRaises(ValueError, node.del_route, routes[0])
 
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_routing(self):
         node = netns.Node()
+        self.assertEquals(len(node.get_routes()), 0)
+
         if0 = node.add_if()
         if0.add_v4_address('10.0.0.1', 24)
-        node.add_default_route(nexthop = '10.0.0.2')
+        if0.up = True
+        self.assertEquals(len(node.get_routes()), 1)
+
+        node.add_route(nexthop = '10.0.0.2') # default route
         node.add_route(prefix = '10.1.0.0', prefix_len = 16,
                 nexthop = '10.0.0.3')
         node.add_route(prefix = '11.1.0.1', prefix_len = 32, interface = if0)

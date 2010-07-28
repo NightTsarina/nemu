@@ -382,13 +382,13 @@ class Server(object):
     def do_ROUT_ADD(self, cmdname, tipe, prefix, prefixlen, nexthop, ifnr,
             metric):
         netns.iproute.add_route(netns.iproute.route(tipe, prefix, prefixlen,
-            nexthop, ifnr, metric))
+            nexthop, ifnr or None, metric))
         self.reply(200, "Done.")
 
     def do_ROUT_DEL(self, cmdname, tipe, prefix, prefixlen, nexthop, ifnr,
             metric):
         netns.iproute.del_route(netns.iproute.route(tipe, prefix, prefixlen,
-            nexthop, ifnr, metric))
+            nexthop, ifnr or None, metric))
         self.reply(200, "Done.")
 
 # ============================================================================
@@ -598,8 +598,8 @@ class Client(object):
 
     def _add_del_route(self, action, route):
         args = ["ROUT", action, _b64(route.tipe), _b64(route.prefix),
-                route.prefix_len, _b64(route.nexthop), route.device,
-                route.metric]
+                route.prefix_len or 0, _b64(route.nexthop),
+                route.interface or 0, route.metric or 0]
         self._send_cmd(*args)
         self._read_and_check_reply()
  
