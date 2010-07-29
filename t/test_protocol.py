@@ -108,7 +108,7 @@ class TestServer(unittest.TestCase):
         check_error(self, "proc crte =a") # invalid b64
 
         # simulate proc mode
-        srv.commands = netns.protocol._proc_commands
+        srv._commands = netns.protocol._proc_commands
         check_error(self, "proc crte foo")
         check_error(self, "proc poll 0")
         check_error(self, "proc wait 0")

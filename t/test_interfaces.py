@@ -151,7 +151,8 @@ class TestWithDummy(unittest.TestCase):
 
     def tearDown(self):
         # oops here
-        os.system("ip link del %s" % self.dummyname)
+        if hasattr(self, 'dummyname'):
+            os.system("ip link del %s" % self.dummyname)
 
 # FIXME: Links
 
