@@ -289,33 +289,9 @@ class Link(ExternalInterface):
         # Max 15 chars
         return "NETNSbr-%.4x%.3x" % (os.getpid(), n)
 
-    bandwidth = property(lambda s: getattr(s, '_bandwidth'))
-    delay = property(lambda s: getattr(s, '_delay'))
-    delay_jitter = property(lambda s: getattr(s, '_delay_jitter'))
-    delay_correlation = property(lambda s: getattr(s, '_delay_correlation'))
-    delay_distribution = property(lambda s: getattr(s, '_delay_distribution'))
-    loss = property(lambda s: getattr(s, '_loss'))
-    loss_correlation = property(lambda s: getattr(s, '_loss_correlation'))
-    dup = property(lambda s: getattr(s, '_dup'))
-    dup_correlation = property(lambda s: getattr(s, '_dup_correlation'))
+        #, bandwidth = None, delay = None, delay_jitter = None, delay_correlation = None, delay_distribution = None, loss = None, loss_correlation = None, dup = None, dup_correlation = None, corrupt = None, corrupt_correlation = None
 
-    def __init__(self, bandwidth = None, delay = None, delay_jitter = None,
-            delay_correlation = None, delay_distribution = None, loss = None,
-            loss_correlation = None, dup = None, dup_correlation = None,
-            corrupt = None, corrupt_correlation = None):
-
-        self._bandwidth = bandwidth
-        self._delay = delay
-        self._delay_jitter = delay_jitter
-        self._delay_correlation = delay_correlation
-        self._delay_distribution = delay_distribution
-        self._loss = loss
-        self._loss_correlation = loss_correlation
-        self._dup = dup
-        self._dup_correlation = dup_correlation
-        self._corrupt = corrupt
-        self._corrupt_correlation = corrupt_correlation
-
+    def __init__(self):
         iface = netns.iproute.create_bridge(self._gen_br_name())
         super(Link, self).__init__(iface.index)
 
@@ -331,7 +307,7 @@ class Link(ExternalInterface):
 
     def __setattr__(self, name, value):
         if name[0] == '_': # forbid anything that doesn't start with a _
-            super(ExternalInterface, self).__setattr__(name, value)
+            super(Link, self).__setattr__(name, value)
             return
         iface = netns.iproute.bridge(index = self.index)
         setattr(iface, name, value)
