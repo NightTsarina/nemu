@@ -14,15 +14,16 @@ class Node(object):
         s = sorted(Node._nodes.items(), key = lambda x: x[0])
         return [x[1] for x in s]
 
-    def __init__(self, debug = False, nonetns = False):
+    def __init__(self, debug = 0, nonetns = False):
         """Create a new node in the emulation. Implemented as a separate
         process in a new network name space. Requires root privileges to run.
 
         If keepns is true, the network name space is not created and can be run
         as a normal user, for testing. If debug is true, details of the
         communication protocol are printed on stderr."""
+
         # Initialize attributes, in case something fails during __init__
-        self._pid = self._debug = self._slave = None
+        self._pid = self._slave = None
         self._processes = weakref.WeakValueDictionary()
         self._interfaces = weakref.WeakValueDictionary()
 
@@ -42,18 +43,19 @@ class Node(object):
     def destroy(self):
         if self._debug: # pragma: no cover
             sys.stderr.write("*** Node(%s) destroy\n" % self.pid)
+
         for p in self._processes.values():
             p.destroy()
+        self._processes.clear()
+
         # Use get_interfaces to force a rescan
         for i in self.get_interfaces():
             i.destroy()
+        self._interfaces.clear()
+
         if self._slave:
             self._slave.shutdown()
-
-        del self._processes
-        del self._interfaces
-        del self._pid
-        del self._slave
+        self._pid = self._slave = None
 
     @property
     def pid(self):
@@ -88,6 +90,9 @@ class Node(object):
             setattr(i, k, v)
         return i
 
+    def import_if(self, interface):
+        return netns.interface.ImportedNodeInterface(self, interface)
+
     def del_if(self, iface):
         """Doesn't destroy the interface if it wasn't created by us."""
         del self._interfaces[iface.index]
@@ -107,7 +112,8 @@ class Node(object):
         for i in list(self._interfaces): # copy before deleting!
             if i not in ifaces:
                 if self._debug:
-                    sys.stderr.write("WARNING: interface #%d went away." % i)
+                    sys.stderr.write("WARNING: interface #%d went away.\n" % i)
+                self._interfaces[i].destroy()
                 del self._interfaces[i]
 
         return sorted(ret, key = lambda x: x.index)
