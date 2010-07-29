@@ -4,7 +4,7 @@ import os
 import netns.iproute
 
 __all__ = ['NodeInterface', 'P2PInterface', 'ForeignInterface',
-'ForeignNodeInterface', 'Link']
+'ForeignNodeInterface', 'ImportedNodeInterface', 'Link']
 
 class Interface(object):
     """Just a base class for the *Interface classes: assign names and handle
@@ -119,12 +119,10 @@ class NodeInterface(NSInterface):
         return self._control
 
     def destroy(self):
-        try:
-            self._slave.del_if(self.index)
-        except:
-            # Maybe it already went away, or the slave died. Anyway, better
-            # ignore the error
-            pass
+        if self._slave:
+            if self.index in self._slave.get_if_data():
+                self._slave.del_if(self.index)
+            self._slave = None
 
 class P2PInterface(NSInterface):
     """Class to create and handle point-to-point interfaces between name
@@ -160,10 +158,10 @@ class P2PInterface(NSInterface):
         raise RuntimeError(P2PInterface.__init__.__doc__)
 
     def destroy(self):
-        try:
-            self._slave.del_if(self.index)
-        except:
-            pass
+        if self._slave:
+            if self.index in self._slave.get_if_data():
+                self._slave.del_if(self.index)
+            self._slave = None
 
 class ForeignNodeInterface(NSInterface):
     """Class to handle already existing interfaces inside a name space, usually
@@ -172,15 +170,39 @@ class ForeignNodeInterface(NSInterface):
     in before being imported into netns."""
     def __init__(self, node, iface):
         iface = node._slave.get_if_data(iface)
-        self._original_state = iface
+        self._original_state = iface.copy()
         super(ForeignNodeInterface, self).__init__(node, iface.index)
 
     # FIXME: register somewhere for destruction!
     def destroy(self): # override: restore as much as possible
-        try:
-            self._slave.set_if(self._original_state)
-        except:
-            pass
+        if self._slave:
+            if self.index in self._slave.get_if_data():
+                self._slave.set_if(self._original_state)
+            self._slave = None
+
+class ImportedNodeInterface(NSInterface):
+    """Class to handle already existing interfaces that are migrated inside a
+    name space: real devices, tun devices, etc.  On destruction, the interface
+    will be restored to the original name space and will try to restore the
+    original state."""
+    def __init__(self, node, iface):
+        iface = netns.iproute.get_if(iface)
+        self._original_state = iface.copy()
+
+        # Change the name to avoid clashes
+        iface.name = self._gen_if_name()
+        netns.iproute.set_if(iface)
+
+        netns.iproute.change_netns(iface, node.pid)
+        super(ImportedNodeInterface, self).__init__(node, iface.index)
+
+    def destroy(self): # override: restore as much as possible
+        if self._slave:
+            if self.index in self._slave.get_if_data():
+                self._slave.change_netns(self.index, os.getpid())
+            # else, assume it is in the main name space
+            netns.iproute.set_if(self._original_state)
+            self._slave = None
 
 class ExternalInterface(Interface):
     """Add user-facing methods for interfaces that run in the main namespace."""
@@ -248,15 +270,15 @@ class ForeignInterface(ExternalInterface):
     was in before being imported into netns."""
     def __init__(self, iface):
         iface = netns.iproute.get_if(iface)
-        self._original_state = iface
+        self._original_state = iface.copy()
         super(ForeignInterface, self).__init__(iface.index)
 
     # FIXME: register somewhere for destruction!
     def destroy(self): # override: restore as much as possible
-        try:
-            netns.iproute.set_if(self._original_state)
-        except:
-            pass
+        if self._slave:
+            if self.index in self._slave.get_if_data():
+                netns.iproute.set_if(self._original_state)
+            self._slave = None
 
 # Link is just another interface type
 
@@ -266,6 +288,16 @@ class Link(ExternalInterface):
         n = Link._gen_next_id()
         # Max 15 chars
         return "NETNSbr-%.4x%.3x" % (os.getpid(), n)
+
+    bandwidth = property(lambda s: getattr(s, '_bandwidth'))
+    delay = property(lambda s: getattr(s, '_delay'))
+    delay_jitter = property(lambda s: getattr(s, '_delay_jitter'))
+    delay_correlation = property(lambda s: getattr(s, '_delay_correlation'))
+    delay_distribution = property(lambda s: getattr(s, '_delay_distribution'))
+    loss = property(lambda s: getattr(s, '_loss'))
+    loss_correlation = property(lambda s: getattr(s, '_loss_correlation'))
+    dup = property(lambda s: getattr(s, '_dup'))
+    dup_correlation = property(lambda s: getattr(s, '_dup_correlation'))
 
     def __init__(self, bandwidth = None, delay = None, delay_jitter = None,
             delay_correlation = None, delay_distribution = None, loss = None,
