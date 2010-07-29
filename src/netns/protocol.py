@@ -67,13 +67,13 @@ class Server(object):
     """Class that implements the communication protocol and dispatches calls to
     the required functions. Also works as the main loop for the slave
     process."""
-    def __init__(self, rfd, wfd, debug = False):
+    def __init__(self, rfd, wfd, debug = 0):
         # Dictionary of valid commands
-        self.commands = _proto_commands
+        self._commands = _proto_commands
         # Flag to stop the server
-        self.closed = False
+        self._closed = False
         # Print debug info
-        self.debug = debug
+        self._debug = debug
         # Set to keep track of started processes
         self._children = set()
         # Buffer and flag for PROC mode
@@ -93,22 +93,22 @@ class Server(object):
         for i in range(len(clean) - 1):
             s = str(code) + "-" + clean[i] + "\n"
             self._wfd.write(s)
-            if self.debug: # pragma: no cover
+            if self._debug > 1: # pragma: no cover
                 sys.stderr.write("<ans> %s" % s)
 
         s = str(code) + " " + clean[-1] + "\n"
         self._wfd.write(s)
-        if self.debug: # pragma: no cover
-            sys.stderr.write("<ans> %s" % s)
+        if self._debug > 1: # pragma: no cover
+            sys.stderr.write("<S> %s" % s)
         return
 
     def readline(self):
         "Read a line from the socket and detect connection break-up."
         line = self._rfd.readline()
         if not line:
-            self.closed = True
+            self._closed = True
             return None
-        if self.debug: # pragma: no cover
+        if self._debug > 1: # pragma: no cover
             sys.stderr.write("<C> %s" % line)
         return line.rstrip()
 
@@ -121,13 +121,13 @@ class Server(object):
             return None
         args = line.split()
         cmd1 = args[0].upper()
-        if cmd1 not in self.commands:
+        if cmd1 not in self._commands:
             self.reply(500, "Unknown command %s." % cmd1)
             return None
         del args[0]
 
         cmd2 = None
-        subcommands = self.commands[cmd1]
+        subcommands = self._commands[cmd1]
 
         if subcommands.keys() != [ None ]:
             if len(args) < 1:
@@ -185,7 +185,7 @@ class Server(object):
             j += 1
 
         func = getattr(self, funcname)
-        if self.debug: # pragma: no cover
+        if self._debug > 2: # pragma: no cover
             sys.stderr.write("<cmd> %s, args: %s\n" % (cmdname, args))
         return (func, cmdname, args)
 
@@ -193,7 +193,7 @@ class Server(object):
         """Main loop; reads commands until the server is shut down or the
         connection is terminated."""
         self.reply(220, "Hello.");
-        while not self.closed:
+        while not self._closed:
             cmd = self.readcmd()
             if cmd == None:
                 continue
@@ -215,8 +215,8 @@ class Server(object):
 
     def do_HELP(self, cmdname):
         reply = ["Available commands:"]
-        for c in sorted(self.commands):
-            for sc in sorted(self.commands[c]):
+        for c in sorted(self._commands):
+            for sc in sorted(self._commands[c]):
                 if sc:
                     reply.append("%s %s" % (c, sc))
                 else:
@@ -225,11 +225,11 @@ class Server(object):
 
     def do_QUIT(self, cmdname):
         self.reply(221, "Sayounara.");
-        self.closed = True
+        self._closed = True
 
     def do_PROC_CRTE(self, cmdname, executable, *argv):
         self._proc = { 'executable': executable, 'argv': argv }
-        self.commands = _proc_commands
+        self._commands = _proc_commands
         self.reply(200, "Entering PROC mode.")
 
     def do_PROC_USER(self, cmdname, user):
@@ -276,7 +276,7 @@ class Server(object):
         params = self._proc
         params['close_fds'] = True # forced
         self._proc = None
-        self.commands = _proto_commands
+        self._commands = _proto_commands
 
         try:
             chld = netns.subprocess_.spawn(**params)
@@ -291,7 +291,7 @@ class Server(object):
 
     def do_PROC_ABRT(self, cmdname):
         self._proc = None
-        self.commands = _proto_commands
+        self._commands = _proto_commands
         self.reply(200, "Aborted.")
 
     def do_PROC_POLL(self, cmdname, pid):
@@ -398,19 +398,29 @@ class Server(object):
 class Client(object):
     """Client-side implementation of the communication protocol. Acts as a RPC
     service."""
-    def __init__(self, rfd, wfd, debug = False):
+    def __init__(self, rfd, wfd, debug = 0):
+        self._debug = debug
         self._rfd = _get_file(rfd, "r")
         self._wfd = _get_file(wfd, "w")
         # Wait for slave to send banner
         self._read_and_check_reply()
 
+    def __del__(self):
+        if self._debug:
+            sys.stderr.write("*** Client(%d) __del__\n" % id(self))
+        self.shutdown()
+
     def _send_cmd(self, *args):
+        if not self._wfd:
+            raise RuntimeError("Client already shut down.")
         s = " ".join(map(str, args)) + "\n"
         self._wfd.write(s)
 
     def _read_reply(self):
         """Reads a (possibly multi-line) response from the server. Returns a
         tuple containing (code, text)"""
+        if not self._rfd:
+            raise RuntimeError("Client already shut down.")
         text = []
         while True:
             line = self._rfd.readline().rstrip()
@@ -440,8 +450,17 @@ class Client(object):
 
     def shutdown(self):
         "Tell the client to quit."
+        if not self._wfd:
+            return
+        if self._debug:
+            sys.stderr.write("*** Client(%d) shutdown\n" % id(self))
+
         self._send_cmd("QUIT")
         self._read_and_check_reply()
+        self._rfd.close()
+        self._rfd = None
+        self._wfd.close()
+        self._wfd = None
 
     def _send_fd(self, name, fd):
         "Pass a file descriptor"

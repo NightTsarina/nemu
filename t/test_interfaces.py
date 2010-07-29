@@ -125,41 +125,33 @@ class TestWithDummy(unittest.TestCase):
             "Test trigger a kernel bug on 2.6.34")
     def test_interface_migration(self):
         node = netns.Node()
-        dummyname = "dummy%d" % os.getpid()
+        self.dummyname = "dummy%d" % os.getpid()
         self.assertEquals(
-                os.system("ip link add name %s type dummy" % dummyname), 0)
+                os.system("ip link add name %s type dummy" % self.dummyname), 0)
         devs = get_devs()
-        self.assertTrue(dummyname in devs)
-        dummyidx = devs[dummyname]['idx']
+        self.assertTrue(self.dummyname in devs)
+        dummyidx = devs[self.dummyname]['idx']
 
-        self.cleanup += [(dummyidx, None)]
-
-        # Move manually
-        netns.iproute.change_netns(dummyidx, node.pid)
-        self.cleanup.remove((dummyidx, None))
-        self.cleanup += [(dummyidx, node)]
+        if0 = node.import_if(self.dummyname)
+        self.assertTrue(self.dummyname not in get_devs())
 
         node_devs = dict([(i.index, i) for i in node.get_interfaces()])
-        self.assertTrue(devs[dummyname]['idx'] in node_devs)
+        self.assertTrue(dummyidx in node_devs)
 
-        if0 = node_devs[devs[dummyname]['idx']]
         if0.lladdr = '42:71:e0:90:ca:43'
         if0.mtu = 1400
 
         devs = get_devs_netns(node)
         self.assertTrue(if0.name in devs)
-        self.assertEquals(devs[if0.name]['lladdr'], if0.lladdr)
-        self.assertEquals(devs[if0.name]['mtu'], if0.mtu)
+        self.assertEquals(devs[if0.name]['lladdr'], '42:71:e0:90:ca:43')
+        self.assertEquals(devs[if0.name]['mtu'], 1400)
+
+        node.destroy()
+        self.assertTrue(self.dummyname in get_devs())
 
     def tearDown(self):
-        for (i, n) in self.cleanup:
-            if n:
-                j = [j for j in n.get_interfaces() if j.index == i][0]
-                n.del_if(j)
-                n._slave.change_netns(i, os.getpid())
-            iface = netns.iproute.get_if(i)
-            # oops here
-            os.system("ip link del %s" % iface.name)
+        # oops here
+        os.system("ip link del %s" % self.dummyname)
 
 # FIXME: Links
 

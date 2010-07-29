@@ -1,6 +1,6 @@
 # vim:ts=4:sw=4:et:ai:sts=4
 
-import os, re, socket, subprocess, sys
+import copy, os, re, socket, subprocess, sys
 
 # helpers
 def _any_to_bool(any):
@@ -113,6 +113,9 @@ class interface(object):
         arp         = None if self.arp == o.arp else self.arp
         return self.__class__(self.index, name, up, mtu, lladdr, broadcast,
                 multicast, arp)
+
+    def copy(self):
+        return copy.copy(self)
 
 class bridge(interface):
     changeable_attributes = interface.changeable_attributes + ["stp",
