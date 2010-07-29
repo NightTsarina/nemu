@@ -1,6 +1,6 @@
 # vim:ts=4:sw=4:et:ai:sts=4
 
-import os
+import os, weakref
 import netns.iproute
 
 __all__ = ['NodeInterface', 'P2PInterface', 'ForeignInterface',
@@ -275,10 +275,9 @@ class ForeignInterface(ExternalInterface):
 
     # FIXME: register somewhere for destruction!
     def destroy(self): # override: restore as much as possible
-        if self._slave:
-            if self.index in self._slave.get_if_data():
-                netns.iproute.set_if(self._original_state)
-            self._slave = None
+        if self._original_state:
+            netns.iproute.set_if(self._original_state)
+        self._original_state = None
 
 # Link is just another interface type
 
@@ -295,7 +294,7 @@ class Link(ExternalInterface):
         iface = netns.iproute.create_bridge(self._gen_br_name())
         super(Link, self).__init__(iface.index)
 
-        self._ports = set()
+        self._ports = weakref.WeakValueDictionary()
         # FIXME: is this correct/desirable/etc?
         self.stp = False
         self.forward_delay = 0
@@ -309,33 +308,42 @@ class Link(ExternalInterface):
         if name[0] == '_': # forbid anything that doesn't start with a _
             super(Link, self).__setattr__(name, value)
             return
+        # Set ports
+        if name in ('up', 'mtu'):
+            for i in self._ports.values():
+                setattr(i, name, value)
+        # Set bridge
         iface = netns.iproute.bridge(index = self.index)
         setattr(iface, name, value)
-        return netns.iproute.set_bridge(iface)
+        netns.iproute.set_bridge(iface)
 
     def __del__(self):
         self.destroy()
 
     def destroy(self):
-        for p in self._ports:
+        if not self.index:
+            return
+        self.up = False
+        for p in self._ports.values():
             try:
                 self.disconnect(p)
             except:
                 pass
-        self.up = False
+        self._ports.clear()
         netns.iproute.del_bridge(self.index)
+        self._idx = None
 
     def connect(self, iface):
         assert iface.control.index not in self._ports
         netns.iproute.add_bridge_port(self.index, iface.control.index)
         # FIXME: up/down, mtu, etc should be automatically propagated?
         iface.control.up = True
-        self._ports.add(iface.control.index)
+        self._ports[iface.control.index] = iface.control
 
     def disconnect(self, iface):
         assert iface.control.index in self._ports
         netns.iproute.del_bridge_port(self.index, iface.control.index)
-        self._ports.remove(iface.control.index)
+        del self._ports[iface.control.index]
 
 
 # don't look after this :-)
