@@ -288,17 +288,20 @@ class Link(ExternalInterface):
         # Max 15 chars
         return "NETNSbr-%.4x%.3x" % (os.getpid(), n)
 
-        #, bandwidth = None, delay = None, delay_jitter = None, delay_correlation = None, delay_distribution = None, loss = None, loss_correlation = None, dup = None, dup_correlation = None, corrupt = None, corrupt_correlation = None
-
-    def __init__(self):
+    def __init__(self, **args):
+        """Creates a new Link object, which models a linux bridge device.
+        Parameters are passed to the set_parameters() method after creation."""
         iface = netns.iproute.create_bridge(self._gen_br_name())
         super(Link, self).__init__(iface.index)
 
+        self._parameters = {}
         self._ports = weakref.WeakValueDictionary()
         # FIXME: is this correct/desirable/etc?
         self.stp = False
         self.forward_delay = 0
         # FIXME: register somewhere
+        if args:
+            self.set_parameters(**args)
 
     def __getattr__(self, name):
         iface = netns.iproute.get_bridge(self.index)
@@ -335,16 +338,42 @@ class Link(ExternalInterface):
 
     def connect(self, iface):
         assert iface.control.index not in self._ports
-        netns.iproute.add_bridge_port(self.index, iface.control.index)
-        # FIXME: up/down, mtu, etc should be automatically propagated?
+        try:
+            self._apply_parameters(self._parameters, iface.control)
+            netns.iproute.add_bridge_port(self.index, iface.control.index)
+        except:
+            self._apply_parameters({}, iface.control)
+            raise
         iface.control.up = True
         self._ports[iface.control.index] = iface.control
 
     def disconnect(self, iface):
         assert iface.control.index in self._ports
         netns.iproute.del_bridge_port(self.index, iface.control.index)
+        netns.iproute.clear_tc(self.index)
         del self._ports[iface.control.index]
 
+    def set_parameters(self, bandwidth = None,
+            delay = None, delay_jitter = None,
+            delay_correlation = None, delay_distribution = None,
+            loss = None, loss_correlation = None,
+            dup = None, dup_correlation = None,
+            corrupt = None, corrupt_correlation = None):
+        parameters = dict(bandwidth = bandwidth,
+                delay = delay, delay_jitter = delay_jitter,
+                delay_correlation = delay_correlation,
+                delay_distribution = delay_distribution,
+                loss = loss, loss_correlation = loss_correlation,
+                dup = dup, dup_correlation = dup_correlation,
+                corrupt = corrupt, corrupt_correlation = corrupt_correlation)
+        try:
+            self._apply_parameters(parameters)
+        except:
+            self._apply_parameters(self._parameters)
+            raise
+        self._parameters = parameters
 
-# don't look after this :-)
+    def _apply_parameters(self, parameters, port = None):
+        for i in [port] if port else self._ports:
+            netns.iproute.set_tc(self.index, **parameters)
 

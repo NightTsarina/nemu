@@ -2,6 +2,31 @@
 
 import copy, os, re, socket, subprocess, sys
 
+def _find_bin(name):
+    for pref in ("/", "/usr/", "/usr/local/"):
+        for d in ("bin/", "sbin/"):
+            try:
+                os.stat(pref + d + name)
+                return pref + d + name
+            except OSError, e:
+                if e.errno != os.errno.ENOENT:
+                    raise
+    raise RuntimeError("Cannot find `%s' command, impossible to continue." %
+            name)
+
+_ip = _find_bin("ip")
+_tc = _find_bin("tc")
+_brctl = _find_bin("brctl")
+# Seems this is completely bogus. At least, we can assume that the internal HZ
+# is bigger than this.
+_hz = os.sysconf("SC_CLK_TCK")
+
+try:
+    os.stat("/sys/class/net")
+except:
+    raise RuntimeError("Sysfs does not seem to be mounted, impossible to " +
+            "continue.")
+
 # helpers
 def _any_to_bool(any):
     if isinstance(any, bool):
@@ -25,25 +50,25 @@ def _positive(val):
     return v
 
 def _non_empty_str(val):
-    if val == '':
+    if val == "":
         return None
     else:
         return str(val)
 
 def _fix_lladdr(addr):
     foo = addr.lower()
-    if ':' in addr:
+    if ":" in addr:
         # Verify sanity and split
-        m = re.search('^' + ':'.join(['([0-9a-f]{1,2})'] * 6) + '$', foo)
+        m = re.search("^" + ":".join(["([0-9a-f]{1,2})"] * 6) + "$", foo)
         if m is None:
             raise ValueError("Invalid address: `%s'." % addr)
         # Fill missing zeros and glue again
-        return ':'.join(('0' * (2 - len(x)) + x for x in m.groups()))
+        return ":".join(("0" * (2 - len(x)) + x for x in m.groups()))
 
     # Fill missing zeros
-    foo = '0' * (12 - len(foo)) + foo
+    foo = "0" * (12 - len(foo)) + foo
     # Verify sanity and split
-    m = re.search('^' + '([0-9a-f]{2})' * 6 + '$', foo)
+    m = re.search("^" + "([0-9a-f]{2})" * 6 + "$", foo)
     if m is None:
         raise ValueError("Invalid address: `%s'." % addr)
     # Glue
@@ -219,23 +244,23 @@ class ipv6address(address):
                 self.address.__repr__(), self.prefix_len)
 
 class route(object):
-    tipes = ['unicast', 'local', 'broadcast', 'multicast', 'throw',
-            'unreachable', 'prohibit', 'blackhole', 'nat']
+    tipes = ["unicast", "local", "broadcast", "multicast", "throw",
+            "unreachable", "prohibit", "blackhole", "nat"]
 
     tipe = property(_make_getter("_tipe", tipes.__getitem__),
             _make_setter("_tipe", tipes.index))
     prefix = property(_make_getter("_prefix"),
             _make_setter("_prefix", _non_empty_str))
     prefix_len = property(_make_getter("_plen"),
-            lambda s, v: setattr(s, '_plen', int(v or 0)))
+            lambda s, v: setattr(s, "_plen", int(v or 0)))
     nexthop = property(_make_getter("_nexthop"),
             _make_setter("_nexthop", _non_empty_str))
     interface = property(_make_getter("_interface"),
             _make_setter("_interface", _positive))
     metric = property(_make_getter("_metric"),
-            lambda s, v: setattr(s, '_metric', int(v or 0)))
+            lambda s, v: setattr(s, "_metric", int(v or 0)))
 
-    def __init__(self, tipe = 'unicast', prefix = None, prefix_len = 0,
+    def __init__(self, tipe = "unicast", prefix = None, prefix_len = 0,
             nexthop = None, interface = None, metric = 0):
         self.tipe = tipe
         self.prefix = prefix
@@ -263,7 +288,7 @@ class route(object):
 # helpers
 def _execute(cmd):
     #print " ".join(cmd)#; return
-    null = open('/dev/null', 'r+')
+    null = open("/dev/null", "r+")
     p = subprocess.Popen(cmd, stdout = null, stderr = subprocess.PIPE)
     out, err = p.communicate()
     if p.returncode != 0:
@@ -286,7 +311,7 @@ def get_if_data():
 
     In each dictionary, values are interface objects.
     """
-    ipcmd = subprocess.Popen(["ip", "-o", "link", "list"],
+    ipcmd = subprocess.Popen([_ip, "-o", "link", "list"],
         stdout = subprocess.PIPE)
     ipdata = ipcmd.communicate()[0]
     assert ipcmd.wait() == 0
@@ -338,7 +363,7 @@ def create_if_pair(if1, if2):
         if iface[i].mtu:
             cmd[i] += ["mtu", str(iface[i].mtu)]
 
-    cmd = ["ip", "link", "add"] + cmd[0] + ["type", "veth", "peer"] + cmd[1]
+    cmd = [_ip, "link", "add"] + cmd[0] + ["type", "veth", "peer"] + cmd[1]
     _execute(cmd)
     try:
         set_if(if1)
@@ -356,7 +381,7 @@ def create_if_pair(if1, if2):
 
 def del_if(iface):
     ifname = _get_if_name(iface)
-    _execute(["ip", "link", "del", ifname])
+    _execute([_ip, "link", "del", ifname])
 
 def set_if(iface, recover = True):
     def do_cmds(cmds, orig_iface):
@@ -373,7 +398,7 @@ def set_if(iface, recover = True):
 
     # Name goes first
     if diff.name:
-        _ils = ["ip", "link", "set", "dev"]
+        _ils = [_ip, "link", "set", "dev"]
         cmds = [_ils + [orig_iface.name, "name", diff.name]]
         if orig_iface.up:
             # iface needs to be down
@@ -382,7 +407,7 @@ def set_if(iface, recover = True):
         do_cmds(cmds, orig_iface)
 
     # I need to use the new name after a name change, duh!
-    _ils = ["ip", "link", "set", "dev", diff.name or orig_iface.name]
+    _ils = [_ip, "link", "set", "dev", diff.name or orig_iface.name]
     cmds = []
     if diff.lladdr:
         if orig_iface.up:
@@ -407,12 +432,12 @@ def set_if(iface, recover = True):
 
 def change_netns(iface, netns):
     ifname = _get_if_name(iface)
-    _execute(["ip", "link", "set", "dev", ifname, "netns", str(netns)])
+    _execute([_ip, "link", "set", "dev", ifname, "netns", str(netns)])
 
 # Address handling
 
 def get_addr_data():
-    ipcmd = subprocess.Popen(["ip", "-o", "addr", "list"],
+    ipcmd = subprocess.Popen([_ip, "-o", "addr", "list"],
         stdout = subprocess.PIPE)
     ipdata = ipcmd.communicate()[0]
     assert ipcmd.wait() == 0
@@ -454,7 +479,7 @@ def add_addr(iface, address):
     addresses = get_addr_data()[1][ifname]
     assert address not in addresses
 
-    cmd = ["ip", "addr", "add", "dev", ifname, "local",
+    cmd = [_ip, "addr", "add", "dev", ifname, "local",
             "%s/%d" % (address.address, int(address.prefix_len))]
     if hasattr(address, "broadcast"):
         cmd += ["broadcast", address.broadcast if address.broadcast else "+"]
@@ -465,7 +490,7 @@ def del_addr(iface, address):
     addresses = get_addr_data()[1][ifname]
     assert address in addresses
 
-    cmd = ["ip", "addr", "del", "dev", ifname, "local",
+    cmd = [_ip, "addr", "del", "dev", ifname, "local",
             "%s/%d" % (address.address, int(address.prefix_len))]
     _execute(cmd)
 
@@ -497,18 +522,18 @@ def _sysfs_read_br(brname):
         f = file(fname)
         return f.readline().strip()
 
-    p = '/sys/class/net/%s/bridge/' % brname
-    p2 = '/sys/class/net/%s/brif/' % brname
+    p = "/sys/class/net/%s/bridge/" % brname
+    p2 = "/sys/class/net/%s/brif/" % brname
     try:
         os.stat(p)
     except:
         return None
     return dict(
-            stp             = readval(p + 'stp_state'),
-            forward_delay   = float(readval(p + 'forward_delay')) / 100,
-            hello_time      = float(readval(p + 'hello_time')) / 100,
-            ageing_time     = float(readval(p + 'ageing_time')) / 100,
-            max_age         = float(readval(p + 'max_age')) / 100,
+            stp             = readval(p + "stp_state"),
+            forward_delay   = float(readval(p + "forward_delay")) / 100,
+            hello_time      = float(readval(p + "hello_time")) / 100,
+            ageing_time     = float(readval(p + "ageing_time")) / 100,
+            max_age         = float(readval(p + "max_age")) / 100,
             ports           = os.listdir(p2))
 
 def get_bridge_data():
@@ -522,8 +547,8 @@ def get_bridge_data():
         brdata = _sysfs_read_br(iface.name)
         if brdata == None:
             continue
-        ports[iface.index] = [ifdata[1][x].index for x in brdata['ports']]
-        del brdata['ports']
+        ports[iface.index] = [ifdata[1][x].index for x in brdata["ports"]]
+        del brdata["ports"]
         bynam[iface.name] = byidx[iface.index] = \
                 bridge.upgrade(iface, **brdata)
     return byidx, bynam, ports
@@ -531,15 +556,15 @@ def get_bridge_data():
 def get_bridge(br):
     iface = get_if(br)
     brdata = _sysfs_read_br(iface.name)
-    #ports = [ifdata[1][x].index for x in brdata['ports']]
-    del brdata['ports']
+    #ports = [ifdata[1][x].index for x in brdata["ports"]]
+    del brdata["ports"]
     return bridge.upgrade(iface, **brdata)
 
 def create_bridge(br):
     if isinstance(br, str):
         br = interface(name = br)
     assert br.name
-    _execute(['brctl', 'addbr', br.name])
+    _execute([_brctl, "addbr", br.name])
     try:
         set_if(br)
     except:
@@ -553,11 +578,11 @@ def create_bridge(br):
 
 def del_bridge(br):
     brname = _get_if_name(br)
-    _execute(["brctl", "delbr", brname])
+    _execute([_brctl, "delbr", brname])
 
 def set_bridge(br, recover = True):
     def saveval(fname, val):
-        f = file(fname, 'w')
+        f = file(fname, "w")
         f.write(str(val))
         f.close()
     def do_cmds(basename, cmds, orig_br):
@@ -575,37 +600,37 @@ def set_bridge(br, recover = True):
 
     cmds = []
     if diff.stp != None:
-        cmds.append(('stp_state', int(diff.stp)))
+        cmds.append(("stp_state", int(diff.stp)))
     if diff.forward_delay != None:
-        cmds.append(('forward_delay', int(diff.forward_delay)))
+        cmds.append(("forward_delay", int(diff.forward_delay)))
     if diff.hello_time != None:
-        cmds.append(('hello_time', int(diff.hello_time)))
+        cmds.append(("hello_time", int(diff.hello_time)))
     if diff.ageing_time != None:
-        cmds.append(('ageing_time', int(diff.ageing_time)))
+        cmds.append(("ageing_time", int(diff.ageing_time)))
     if diff.max_age != None:
-        cmds.append(('max_age', int(diff.max_age)))
+        cmds.append(("max_age", int(diff.max_age)))
 
     set_if(diff)
     name = diff.name if diff.name != None else orig_br.name
-    do_cmds('/sys/class/net/%s/bridge/' % name, cmds, orig_br)
+    do_cmds("/sys/class/net/%s/bridge/" % name, cmds, orig_br)
 
 def add_bridge_port(br, iface):
     ifname = _get_if_name(iface)
     brname = _get_if_name(br)
-    _execute(['brctl', 'addif', brname, ifname])
+    _execute([_brctl, "addif", brname, ifname])
 
 def del_bridge_port(br, iface):
     ifname = _get_if_name(iface)
     brname = _get_if_name(br)
-    _execute(['brctl', 'delif', brname, ifname])
+    _execute([_brctl, "delif", brname, ifname])
 
 def get_all_route_data():
-    #ipcmd = subprocess.Popen(["ip", "-o", "route", "list", "table", "all"],
-    ipcmd = subprocess.Popen(["ip", "-o", "route", "list"],
+    #ipcmd = subprocess.Popen([_ip, "-o", "route", "list", "table", "all"],
+    ipcmd = subprocess.Popen([_ip, "-o", "route", "list"],
         stdout = subprocess.PIPE)
     ipdata = ipcmd.communicate()[0]
     assert ipcmd.wait() == 0
-    ipcmd = subprocess.Popen(["ip", "-o", "-f", "inet6", "route", "list"],
+    ipcmd = subprocess.Popen([_ip, "-o", "-f", "inet6", "route", "list"],
         stdout = subprocess.PIPE)
     ipdata += ipcmd.communicate()[0]
     assert ipcmd.wait() == 0
@@ -620,12 +645,12 @@ def get_all_route_data():
                 r'(\S+)(?: via (\S+))? dev (\S+).*(?: metric (\d+))?', line)
         if not match:
             raise RuntimeError("Invalid output from `ip route': `%s'" % line)
-        tipe = match.group(1) or 'unicast'
+        tipe = match.group(1) or "unicast"
         prefix = match.group(2)
         nexthop = match.group(3)
         interface = ifdata[match.group(4)]
         metric = match.group(5)
-        if prefix == 'default' or re.search(r'/0$', prefix):
+        if prefix == "default" or re.search(r'/0$', prefix):
             prefix = None
             prefix_len = 0
         else:
@@ -638,30 +663,225 @@ def get_all_route_data():
 
 def get_route_data():
     # filter out non-unicast routes
-    return [x for x in get_all_route_data() if x.tipe == 'unicast']
+    return [x for x in get_all_route_data() if x.tipe == "unicast"]
 
 def add_route(route):
     # Cannot really test this
     #if route in get_all_route_data():
-    #    raise ValueError('Route already exists')
-    _add_del_route('add', route)
+    #    raise ValueError("Route already exists")
+    _add_del_route("add", route)
 
 def del_route(route):
     # Cannot really test this
     #if route not in get_all_route_data():
-    #    raise ValueError('Route does not exist')
-    _add_del_route('del', route)
+    #    raise ValueError("Route does not exist")
+    _add_del_route("del", route)
 
 def _add_del_route(action, route):
-    cmd = ['ip', 'route', action]
-    if route.tipe != 'unicast':
+    cmd = [_ip, "route", action]
+    if route.tipe != "unicast":
         cmd += [route.tipe]
     if route.prefix:
         cmd += ["%s/%d" % (route.prefix, route.prefix_len)]
     else:
-        cmd += ['default']
+        cmd += ["default"]
     if route.nexthop:
-        cmd += ['via', route.nexthop]
+        cmd += ["via", route.nexthop]
     if route.interface:
-        cmd += ['dev', _get_if_name(route.interface)]
+        cmd += ["dev", _get_if_name(route.interface)]
     _execute(cmd)
+
+# TC stuff
+
+def get_tc_tree():
+    tccmd = subprocess.Popen([_tc, "qdisc", "show"], stdout = subprocess.PIPE)
+    tcdata = tccmd.communicate()[0]
+    assert tccmd.wait() == 0
+
+    data = {}
+    for line in tcdata.split("\n"):
+        if line == "":
+            continue
+        match = re.match(r'qdisc (\S+) (\d+):\d* dev (\S+) ' +
+                r'(?:parent (\d+):\d*|root)\s*(.*)', line)
+        if not match:
+            raise RuntimeError("Invalid output from `tc qdisc': `%s'" % line)
+        qdisc = match.group(1)
+        handle = match.group(2)
+        iface = match.group(3)
+        parent = match.group(4) # or None
+        extra = match.group(5)
+        if iface not in data:
+            data[iface] = {}
+        if parent not in data[iface]:
+            data[iface][parent] = []
+        data[iface][parent] += [[handle, qdisc, parent, extra]]
+
+    tree = {}
+    for iface in data:
+        def gen_tree(data, data_node):
+            children = []
+            node = {"handle": data_node[0],
+                    "qdisc": data_node[1],
+                    "extra": data_node[3],
+                    "children": []}
+            if data_node[0] in data:
+                for h in data[data_node[0]]:
+                    node["children"].append(gen_tree(data, h))
+            return node
+        tree[iface] = gen_tree(data[iface], data[iface][None][0])
+    return tree
+
+def get_tc_data():
+    tree = get_tc_tree()
+    ifdata = get_if_data()
+
+    ret = {}
+    for i in ifdata[0]:
+        ret[i] = {"qdiscs": {}}
+        if ifdata[0][i].name not in tree:
+            continue
+        node = tree[ifdata[0][i].name]
+        if not node["children"]:
+            if node["qdisc"] == "mq" or node["qdisc"] == "pfifo_fast" \
+                    or node["qdisc"][1:] == "fifo":
+                continue
+
+            if node["qdisc"] == "netem":
+                tbf = None
+                netem = node["extra"], node["handle"]
+            elif node["qdisc"] == "tbf":
+                tbf = node["extra"], node["handle"]
+                netem = None
+            else:
+                ret[i] = "foreign"
+                continue
+        else:
+            if node["qdisc"] != "tbf" or len(node["children"]) != 1 or \
+                    node["children"][0]["qdisc"] != "netem" or \
+                    node["children"][0]["children"]:
+                ret[i] = "foreign"
+                continue
+            tbf = node["extra"], node["handle"]
+            netem = node["children"][0]["extra"], \
+                    node["children"][0]["handle"]
+
+        multipliers = {"M": 1000000, "K": 1000}
+        dividers = {"m": 1000, "u": 1000000}
+        if tbf:
+            ret[i]["qdiscs"]["tbf"] = tbf[1]
+            match = re.search(r'rate (\d+)([MK]?)bit', tbf[0])
+            if not match:
+                ret[i] = "foreign"
+                continue
+            bandwidth = int(match.group(1))
+            if match.group(2):
+                bandwidth *= multipliers[match.group(2)]
+            ret[i]["bandwidth"] = bandwidth
+
+        if netem:
+            ret[i]["qdiscs"]["netem"] = netem[1]
+            match = re.search(r'delay ([\d.]+)([mu]?)s', netem[0])
+            if not match:
+                ret[i] = "foreign"
+                continue
+            delay = float(match.group(1))
+            if match.group(2):
+                delay /= dividers[match.group(2)]
+            ret[i]["delay"] = delay
+        # FIXME: other parameters?
+    return ret, ifdata[0], ifdata[1]
+
+def clear_tc(iface):
+    iface = get_if(iface)
+    tcdata = get_tc_data()[0]
+    if tcdata[iface.index] == None:
+        return
+    # Any other case, we clean
+    _execute([_tc, "qdisc", "del", "dev", iface.name, "root"])
+
+def set_tc(iface, bandwidth = None, delay = None, delay_jitter = None,
+        delay_correlation = None, delay_distribution = None,
+        loss = None, loss_correlation = None,
+        dup = None, dup_correlation = None,
+        corrupt = None, corrupt_correlation = None):
+    use_netem = bool(delay or delay_jitter or delay_correlation or
+            delay_distribution or loss or loss_correlation or dup or
+            dup_correlation or corrupt or corrupt_correlation)
+
+    iface = get_if(iface)
+    tcdata, ifdata = get_tc_data()[0:2]
+    commands = []
+    if tcdata[iface.index] == 'foreign':
+        # Avoid the overhead of calling tc+ip again
+        commands.append([_tc, "qdisc", "del", "dev", iface.name, "root"])
+        tcdata[iface.index] == {'qdiscs':  []}
+
+    has_netem = 'netem' in tcdata[iface.index]['qdiscs']
+    has_tbf = 'tbf' in tcdata[iface.index]['qdiscs']
+
+    if not bandwidth and not use_netem:
+        if has_netem or has_tbf:
+            clear_tc(iface)
+        return
+
+    if has_netem == use_netem and has_tbf == bool(bandwidth):
+        cmd = "change"
+    else:
+        # Too much work to do better :)
+        if has_netem or has_tbf:
+            commands.append([_tc, "qdisc", "del", "dev", iface.name, "root"])
+        cmd = "add"
+
+    if bandwidth:
+        rate = "%dbps" % int(bandwidth)
+        mtu = ifdata[iface.index].mtu
+        burst = max(mtu, int(bandwidth) / _hz)
+        limit = burst * 2 # FIXME?
+        handle = "1:"
+        if cmd == "change":
+            handle = "%d:" % int(tcdata[iface.index]["qdiscs"]["tbf"])
+        command = [_tc, "qdisc", cmd, "dev", iface.name, "root", "handle",
+                handle, "tbf", "rate", rate, "limit", str(limit), "burst",
+                str(burst)]
+        commands.append(command)
+
+    if use_netem:
+        handle = "2:"
+        if cmd == "change":
+            handle = "%d:" % int(tcdata[iface.index]["qdiscs"]["netem"])
+        command = [_tc, "qdisc", cmd, "dev", iface.name, "handle", handle]
+        if bandwidth:
+            parent = "1:"
+            if cmd == "change":
+                parent = "%d:" % int(tcdata[iface.index]["qdiscs"]["tbf"])
+            command += ["parent", parent]
+        else:
+            command += ["root"]
+        command += ["netem"]
+        if delay:
+            command += ["delay", "%fs" % delay]
+            if delay_jitter:
+                command += ["%fs" % delay_jitter]
+            if delay_correlation:
+                command += ["%f%%" % delay_correlation]
+            if delay_distribution:
+                if not delay_jitter: # or not delay_correlation:
+                    raise ValueError("delay_distribution requires delay_jitter")
+                command += ["distribution", delay_distribution]
+        if loss:
+            command += ["loss", "%f%%" % loss]
+            if loss_correlation:
+                command += ["%f%%" % loss_correlation]
+        if dup:
+            command += ["duplicate", "%f%%" % dup]
+            if dup_correlation:
+                command += ["%f%%" % dup_correlation]
+        if corrupt:
+            command += ["corrupt", "%f%%" % corrupt]
+            if corrupt_correlation:
+                command += ["%f%%" % corrupt_correlation]
+        commands.append(command)
+
+    for c in commands:
+        _execute(c)
