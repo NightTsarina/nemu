@@ -5,6 +5,7 @@ import os, unittest
 import netns, test_util
 
 class TestLink(unittest.TestCase):
+    @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def setUp(self):
         n1 = netns.Node()
         n2 = netns.Node()
