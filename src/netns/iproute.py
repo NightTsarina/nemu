@@ -732,6 +732,67 @@ def get_tc_tree():
         tree[iface] = gen_tree(data[iface], data[iface][None][0])
     return tree
 
+_multipliers = {"M": 1000000, "K": 1000}
+_dividers = {"m": 1000, "u": 1000000}
+def _parse_netem_delay(line):
+    ret = {}
+    match = re.search(r'delay ([\d.]+)([mu]?)s(?: +([\d.]+)([mu]?)s)?' +
+            r'(?: *([\d.]+)%)?(?: *distribution (\S+))?', line)
+    if not match:
+        return ret
+
+    delay = float(match.group(1))
+    if match.group(2):
+        delay /= _dividers[match.group(2)]
+    ret["delay"] = delay
+
+    if match.group(3):
+        delay_jitter = float(match.group(3))
+        if match.group(4):
+            delay_jitter /= _dividers[match.group(4)]
+        ret["delay_jitter"] = delay_jitter
+
+    if match.group(5):
+        ret["delay_correlation"] = float(match.group(5))
+
+    if match.group(6):
+        ret["delay_distribution"] = match.group(6)
+
+    return ret
+
+def _parse_netem_loss(line):
+    ret = {}
+    match = re.search(r'loss ([\d.]+)%(?: *([\d.]+)%)?', line)
+    if not match:
+        return ret
+
+    ret["loss"] = float(match.group(1))
+    if match.group(2):
+        ret["loss_correlation"] = float(match.group(2))
+    return ret
+
+def _parse_netem_dup(line):
+    ret = {}
+    match = re.search(r'duplicate ([\d.]+)%(?: *([\d.]+)%)?', line)
+    if not match:
+        return ret
+
+    ret["dup"] = float(match.group(1))
+    if match.group(2):
+        ret["dup_correlation"] = float(match.group(2))
+    return ret
+
+def _parse_netem_corrupt(line):
+    ret = {}
+    match = re.search(r'corrupt ([\d.]+)%(?: *([\d.]+)%)?', line)
+    if not match:
+        return ret
+
+    ret["corrupt"] = float(match.group(1))
+    if match.group(2):
+        ret["corrupt_correlation"] = float(match.group(2))
+    return ret
+
 def get_tc_data():
     tree = get_tc_tree()
     ifdata = get_if_data()
@@ -766,8 +827,6 @@ def get_tc_data():
             netem = node["children"][0]["extra"], \
                     node["children"][0]["handle"]
 
-        multipliers = {"M": 1000000, "K": 1000}
-        dividers = {"m": 1000, "u": 1000000}
         if tbf:
             ret[i]["qdiscs"]["tbf"] = tbf[1]
             match = re.search(r'rate (\d+)([MK]?)bit', tbf[0])
@@ -776,20 +835,15 @@ def get_tc_data():
                 continue
             bandwidth = int(match.group(1))
             if match.group(2):
-                bandwidth *= multipliers[match.group(2)]
+                bandwidth *= _multipliers[match.group(2)]
             ret[i]["bandwidth"] = bandwidth
 
         if netem:
             ret[i]["qdiscs"]["netem"] = netem[1]
-            match = re.search(r'delay ([\d.]+)([mu]?)s', netem[0])
-            if not match:
-                ret[i] = "foreign"
-                continue
-            delay = float(match.group(1))
-            if match.group(2):
-                delay /= dividers[match.group(2)]
-            ret[i]["delay"] = delay
-        # FIXME: other parameters?
+            ret[i].update(_parse_netem_delay(netem[0]))
+            ret[i].update(_parse_netem_loss(netem[0]))
+            ret[i].update(_parse_netem_dup(netem[0]))
+            ret[i].update(_parse_netem_corrupt(netem[0]))
     return ret, ifdata[0], ifdata[1]
 
 def clear_tc(iface):
@@ -815,7 +869,7 @@ def set_tc(iface, bandwidth = None, delay = None, delay_jitter = None,
     if tcdata[iface.index] == 'foreign':
         # Avoid the overhead of calling tc+ip again
         commands.append([_tc, "qdisc", "del", "dev", iface.name, "root"])
-        tcdata[iface.index] == {'qdiscs':  []}
+        tcdata[iface.index] = {'qdiscs':  []}
 
     has_netem = 'netem' in tcdata[iface.index]['qdiscs']
     has_tbf = 'tbf' in tcdata[iface.index]['qdiscs']
