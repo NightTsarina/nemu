@@ -4,7 +4,7 @@
 import os, unittest
 import netns, test_util
 
-class TestGlobal(unittest.TestCase):
+class TestLink(unittest.TestCase):
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_link(self):
         n1 = netns.Node()
@@ -30,6 +30,14 @@ class TestGlobal(unittest.TestCase):
         ifdata = netns.iproute.get_if_data()[0]
         self.assertEquals(ifdata[i1.control.index].up, True, "UP propagation")
         self.assertEquals(ifdata[i2.control.index].up, True, "UP propagation")
+
+        # None => tbf
+        l.set_parameters(bandwidth = 100*1024*1024/8) # 100 mbits
+        tcdata = netns.iproute.get_tc_data()[0]
+        self.assertEquals(tcdata[i1.control.index],
+                {'bandwidth': 104858000, 'qdiscs': {'tbf': '1'}})
+        self.assertEquals(tcdata[i2.control.index],
+                {'bandwidth': 104858000, 'qdiscs': {'tbf': '1'}})
         #bandwidth = 100*1024*1024/8, loss=10, loss_correlation=1,delay=0.001,dup_correlation=0.1); 
         # FIXME: more cases
 

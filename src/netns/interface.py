@@ -351,7 +351,7 @@ class Link(ExternalInterface):
     def disconnect(self, iface):
         assert iface.control.index in self._ports
         netns.iproute.del_bridge_port(self.index, iface.control.index)
-        netns.iproute.clear_tc(self.index)
+        self._apply_parameters({}, iface.control)
         del self._ports[iface.control.index]
 
     def set_parameters(self, bandwidth = None,
@@ -375,6 +375,6 @@ class Link(ExternalInterface):
         self._parameters = parameters
 
     def _apply_parameters(self, parameters, port = None):
-        for i in [port] if port else self._ports:
-            netns.iproute.set_tc(self.index, **parameters)
+        for i in [port] if port else self._ports.values():
+            netns.iproute.set_tc(i.index, **parameters)
 
