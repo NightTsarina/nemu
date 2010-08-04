@@ -344,7 +344,8 @@ class Link(ExternalInterface):
         except:
             self._apply_parameters({}, iface.control)
             raise
-        iface.control.up = True
+        iface.control.up = self.up
+        iface.control.mtu = self.mtu
         self._ports[iface.control.index] = iface.control
 
     def disconnect(self, iface):
