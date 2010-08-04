@@ -32,13 +32,30 @@ class TestLink(unittest.TestCase):
         self.assertEquals(ifdata[i2.control.index].up, True, "UP propagation")
 
         # None => tbf
-        l.set_parameters(bandwidth = 100*1024*1024/8) # 100 mbits
+        l.set_parameters(bandwidth = 13107200) # 100 mbits
         tcdata = netns.iproute.get_tc_data()[0]
         self.assertEquals(tcdata[i1.control.index],
-                {'bandwidth': 104858000, 'qdiscs': {'tbf': '1'}})
+                # adjust for tc rounding
+                {'bandwidth': 13107000, 'qdiscs': {'tbf': '1'}})
         self.assertEquals(tcdata[i2.control.index],
-                {'bandwidth': 104858000, 'qdiscs': {'tbf': '1'}})
-        #bandwidth = 100*1024*1024/8, loss=10, loss_correlation=1,delay=0.001,dup_correlation=0.1); 
+                {'bandwidth': 13107000, 'qdiscs': {'tbf': '1'}})
+
+        # none again
+        l.set_parameters()
+        tcdata = netns.iproute.get_tc_data()[0]
+        self.assertEquals(tcdata[i1.control.index], {'qdiscs': {}})
+        self.assertEquals(tcdata[i2.control.index], {'qdiscs': {}})
+
+        # cheat and see what happens
+        os.system(("tc qd add dev %s root prio bands 3 " +
+            "priomap 1 2 2 2 1 2 0 0 1 1 1 1 1 1 1 1") % i1.control.name)
+        tcdata = netns.iproute.get_tc_data()[0]
+        self.assertEquals(tcdata[i1.control.index], "foreign")
+        l.set_parameters(bandwidth = 13107200) # 100 mbits
+        tcdata = netns.iproute.get_tc_data()[0]
+        self.assertEquals(tcdata[i1.control.index],
+                {'bandwidth': 13107000, 'qdiscs': {'tbf': '1'}})
+
         # FIXME: more cases
 
 if __name__ == '__main__':

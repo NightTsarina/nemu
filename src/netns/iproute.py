@@ -753,7 +753,7 @@ def _parse_netem_delay(line):
         ret["delay_jitter"] = delay_jitter
 
     if match.group(5):
-        ret["delay_correlation"] = float(match.group(5))
+        ret["delay_correlation"] = float(match.group(5)) / 100
 
     if match.group(6):
         ret["delay_distribution"] = match.group(6)
@@ -766,9 +766,9 @@ def _parse_netem_loss(line):
     if not match:
         return ret
 
-    ret["loss"] = float(match.group(1))
+    ret["loss"] = float(match.group(1)) / 100
     if match.group(2):
-        ret["loss_correlation"] = float(match.group(2))
+        ret["loss_correlation"] = float(match.group(2)) / 100
     return ret
 
 def _parse_netem_dup(line):
@@ -777,9 +777,9 @@ def _parse_netem_dup(line):
     if not match:
         return ret
 
-    ret["dup"] = float(match.group(1))
+    ret["dup"] = float(match.group(1)) / 100
     if match.group(2):
-        ret["dup_correlation"] = float(match.group(2))
+        ret["dup_correlation"] = float(match.group(2)) / 100
     return ret
 
 def _parse_netem_corrupt(line):
@@ -788,9 +788,9 @@ def _parse_netem_corrupt(line):
     if not match:
         return ret
 
-    ret["corrupt"] = float(match.group(1))
+    ret["corrupt"] = float(match.group(1)) / 100
     if match.group(2):
-        ret["corrupt_correlation"] = float(match.group(2))
+        ret["corrupt_correlation"] = float(match.group(2)) / 100
     return ret
 
 def get_tc_data():
@@ -888,7 +888,7 @@ def set_tc(iface, bandwidth = None, delay = None, delay_jitter = None,
         cmd = "add"
 
     if bandwidth:
-        rate = "%dbps" % int(bandwidth)
+        rate = "%dbit" % int(bandwidth)
         mtu = ifdata[iface.index].mtu
         burst = max(mtu, int(bandwidth) / _hz)
         limit = burst * 2 # FIXME?
@@ -918,23 +918,23 @@ def set_tc(iface, bandwidth = None, delay = None, delay_jitter = None,
             if delay_jitter:
                 command += ["%fs" % delay_jitter]
             if delay_correlation:
-                command += ["%f%%" % delay_correlation]
+                command += ["%f%%" % (delay_correlation * 100)]
             if delay_distribution:
                 if not delay_jitter: # or not delay_correlation:
                     raise ValueError("delay_distribution requires delay_jitter")
                 command += ["distribution", delay_distribution]
         if loss:
-            command += ["loss", "%f%%" % loss]
+            command += ["loss", "%f%%" % (loss * 100)]
             if loss_correlation:
-                command += ["%f%%" % loss_correlation]
+                command += ["%f%%" % (loss_correlation * 100)]
         if dup:
-            command += ["duplicate", "%f%%" % dup]
+            command += ["duplicate", "%f%%" % (dup * 100)]
             if dup_correlation:
-                command += ["%f%%" % dup_correlation]
+                command += ["%f%%" % (dup_correlation * 100)]
         if corrupt:
-            command += ["corrupt", "%f%%" % corrupt]
+            command += ["corrupt", "%f%%" % (corrupt * 100)]
             if corrupt_correlation:
-                command += ["%f%%" % corrupt_correlation]
+                command += ["%f%%" % (corrupt_correlation * 100)]
         commands.append(command)
 
     for c in commands:

@@ -360,6 +360,20 @@ class Link(ExternalInterface):
             loss = None, loss_correlation = None,
             dup = None, dup_correlation = None,
             corrupt = None, corrupt_correlation = None):
+        """Set the parameters that control the link characteristics. For the
+        description of each, refer to netem documentation:
+        http://www.linuxfoundation.org/collaborate/workgroups/networking/netem
+
+        Arguments:
+        - `bandwidth' should be specified in bits per second.
+        - `delay' and `delay_jitter' are specified in seconds.
+        - `delay_distribution' is the name of a distribution description file;
+          `iproute' comes by default with `normal', `pareto', and
+          `paretonormal'.
+        - `delay_correlation', `loss', `loss_correlation', `dup',
+          `dup_correlation', `corrupt', and `corrupt_correlation' take a
+          percentage value in the form of a number between 0 and 1. (50% is
+          passed as 0.5)."""
         parameters = dict(bandwidth = bandwidth,
                 delay = delay, delay_jitter = delay_jitter,
                 delay_correlation = delay_correlation,
