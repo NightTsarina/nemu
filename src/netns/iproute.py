@@ -702,8 +702,8 @@ def get_tc_tree():
     for line in tcdata.split("\n"):
         if line == "":
             continue
-        match = re.match(r'qdisc (\S+) (\d+):\d* dev (\S+) ' +
-                r'(?:parent (\d+):\d*|root)\s*(.*)', line)
+        match = re.match(r'qdisc (\S+) ([0-9a-f]+):[0-9a-f]* dev (\S+) ' +
+                r'(?:parent ([0-9a-f]+):[0-9a-f]*|root)\s*(.*)', line)
         if not match:
             raise RuntimeError("Invalid output from `tc qdisc': `%s'" % line)
         qdisc = match.group(1)
