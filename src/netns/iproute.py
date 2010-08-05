@@ -262,14 +262,6 @@ class route(object):
                 and self.interface == o.interface and self.metric == o.metric)
 
 # helpers
-def _execute(cmd):
-    #print " ".join(cmd)#; return
-    null = open("/dev/null", "r+")
-    p = subprocess.Popen(cmd, stdout = null, stderr = subprocess.PIPE)
-    out, err = p.communicate()
-    if p.returncode != 0:
-        raise RuntimeError("Error executing `%s': %s" % (" ".join(cmd), err))
-
 def _get_if_name(iface):
     if isinstance(iface, interface):
         if iface.name != None:
@@ -287,10 +279,7 @@ def get_if_data():
 
     In each dictionary, values are interface objects.
     """
-    ipcmd = subprocess.Popen([ip_path, "-o", "link", "list"],
-        stdout = subprocess.PIPE)
-    ipdata = ipcmd.communicate()[0]
-    assert ipcmd.wait() == 0
+    ipdata = backticks([ip_path, "-o", "link", "list"])
 
     byidx = {}
     bynam = {}
@@ -340,7 +329,7 @@ def create_if_pair(if1, if2):
             cmd[i] += ["mtu", str(iface[i].mtu)]
 
     cmd = [ip_path, "link", "add"] + cmd[0] + ["type", "veth", "peer"] + cmd[1]
-    _execute(cmd)
+    execute(cmd)
     try:
         set_if(if1)
         set_if(if2)
@@ -357,13 +346,13 @@ def create_if_pair(if1, if2):
 
 def del_if(iface):
     ifname = _get_if_name(iface)
-    _execute([ip_path, "link", "del", ifname])
+    execute([ip_path, "link", "del", ifname])
 
 def set_if(iface, recover = True):
     def do_cmds(cmds, orig_iface):
         for c in cmds:
             try:
-                _execute(c)
+                execute(c)
             except:
                 if recover:
                     set_if(orig_iface, recover = False) # rollback
@@ -408,15 +397,12 @@ def set_if(iface, recover = True):
 
 def change_netns(iface, netns):
     ifname = _get_if_name(iface)
-    _execute([ip_path, "link", "set", "dev", ifname, "netns", str(netns)])
+    execute([ip_path, "link", "set", "dev", ifname, "netns", str(netns)])
 
 # Address handling
 
 def get_addr_data():
-    ipcmd = subprocess.Popen([ip_path, "-o", "addr", "list"],
-        stdout = subprocess.PIPE)
-    ipdata = ipcmd.communicate()[0]
-    assert ipcmd.wait() == 0
+    ipdata = backticks([ip_path, "-o", "addr", "list"])
 
     byidx = {}
     bynam = {}
@@ -459,7 +445,7 @@ def add_addr(iface, address):
             "%s/%d" % (address.address, int(address.prefix_len))]
     if hasattr(address, "broadcast"):
         cmd += ["broadcast", address.broadcast if address.broadcast else "+"]
-    _execute(cmd)
+    execute(cmd)
 
 def del_addr(iface, address):
     ifname = _get_if_name(iface)
@@ -468,7 +454,7 @@ def del_addr(iface, address):
 
     cmd = [ip_path, "addr", "del", "dev", ifname, "local",
             "%s/%d" % (address.address, int(address.prefix_len))]
-    _execute(cmd)
+    execute(cmd)
 
 def set_addr(iface, addresses, recover = True):
     ifname = _get_if_name(iface)
@@ -540,7 +526,7 @@ def create_bridge(br):
     if isinstance(br, str):
         br = interface(name = br)
     assert br.name
-    _execute([brctl_path, "addbr", br.name])
+    execute([brctl_path, "addbr", br.name])
     try:
         set_if(br)
     except:
@@ -554,7 +540,7 @@ def create_bridge(br):
 
 def del_bridge(br):
     brname = _get_if_name(br)
-    _execute([brctl_path, "delbr", brname])
+    execute([brctl_path, "delbr", brname])
 
 def set_bridge(br, recover = True):
     def saveval(fname, val):
@@ -593,23 +579,16 @@ def set_bridge(br, recover = True):
 def add_bridge_port(br, iface):
     ifname = _get_if_name(iface)
     brname = _get_if_name(br)
-    _execute([brctl_path, "addif", brname, ifname])
+    execute([brctl_path, "addif", brname, ifname])
 
 def del_bridge_port(br, iface):
     ifname = _get_if_name(iface)
     brname = _get_if_name(br)
-    _execute([brctl_path, "delif", brname, ifname])
+    execute([brctl_path, "delif", brname, ifname])
 
 def get_all_route_data():
-    #ipcmd = subprocess.Popen([ip_path, "-o", "route", "list", "table", "all"],
-    ipcmd = subprocess.Popen([ip_path, "-o", "route", "list"],
-        stdout = subprocess.PIPE)
-    ipdata = ipcmd.communicate()[0]
-    assert ipcmd.wait() == 0
-    ipcmd = subprocess.Popen([ip_path, "-o", "-f", "inet6", "route", "list"],
-        stdout = subprocess.PIPE)
-    ipdata += ipcmd.communicate()[0]
-    assert ipcmd.wait() == 0
+    ipdata = backticks([ip_path, "-o", "route", "list"]) # "table", "all"
+    ipdata += backticks([ip_path, "-o", "-f", "inet6", "route", "list"])
 
     ifdata = get_if_data()[1]
     ret = []
@@ -665,15 +644,12 @@ def _add_del_route(action, route):
         cmd += ["via", route.nexthop]
     if route.interface:
         cmd += ["dev", _get_if_name(route.interface)]
-    _execute(cmd)
+    execute(cmd)
 
 # TC stuff
 
 def get_tc_tree():
-    tccmd = subprocess.Popen([tc_path, "qdisc", "show"],
-            stdout = subprocess.PIPE)
-    tcdata = tccmd.communicate()[0]
-    assert tccmd.wait() == 0
+    tcdata = backticks([tc_path, "qdisc", "show"])
 
     data = {}
     for line in tcdata.split("\n"):
@@ -829,7 +805,7 @@ def clear_tc(iface):
     if tcdata[iface.index] == None:
         return
     # Any other case, we clean
-    _execute([tc_path, "qdisc", "del", "dev", iface.name, "root"])
+    execute([tc_path, "qdisc", "del", "dev", iface.name, "root"])
 
 def set_tc(iface, bandwidth = None, delay = None, delay_jitter = None,
         delay_correlation = None, delay_distribution = None,
@@ -916,4 +892,4 @@ def set_tc(iface, bandwidth = None, delay = None, delay_jitter = None,
         commands.append(command)
 
     for c in commands:
-        _execute(c)
+        execute(c)

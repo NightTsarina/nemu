@@ -1,8 +1,9 @@
 # vim:ts=4:sw=4:et:ai:sts=4
 
-import os
+import os, subprocess
 
-__all__ = ["ip_path", "tc_path", "brctl_path", "hz"]
+__all__ = ["ip_path", "tc_path", "brctl_path", "sysctl_path", "hz"]
+__all__ += ["execute", "backticks"]
 
 def _find_bin(name):
     for pref in ("/", "/usr/", "/usr/local/"):
@@ -30,4 +31,20 @@ try:
 except:
     raise RuntimeError("Sysfs does not seem to be mounted, impossible to " +
             "continue.")
+
+def execute(cmd):
+    #print " ".join(cmd)#; return
+    null = open("/dev/null", "r+")
+    p = subprocess.Popen(cmd, stdout = null, stderr = subprocess.PIPE)
+    out, err = p.communicate()
+    if p.returncode != 0:
+        raise RuntimeError("Error executing `%s': %s" % (" ".join(cmd), err))
+
+def backticks(cmd):
+    p = subprocess.Popen(cmd, stdout = subprocess.PIPE,
+            stderr = subprocess.PIPE)
+    out, err = p.communicate()
+    if p.returncode != 0:
+        raise RuntimeError("Error executing `%s': %s" % (" ".join(cmd), err))
+    return out
 

@@ -2,7 +2,8 @@
 # vim:ts=4:sw=4:et:ai:sts=4
 
 import os, socket, sys, traceback, unshare, weakref
-import netns.environ, netns.protocol, netns.subprocess_
+from netns.environ import *
+import netns.protocol, netns.subprocess_
 
 __all__ = ['Node', 'get_nodes']
 
@@ -161,10 +162,8 @@ def _start_child(debug, nonetns):
             # create new name space
             unshare.unshare(unshare.CLONE_NEWNET)
             # Enable packet forwarding
-            netns.iproute._execute([netns.environ.sysctl_path, '-w',
-                'net.ipv4.ip_forward=1'])
-            netns.iproute._execute([netns.environ.sysctl_path, '-w',
-                'net.ipv6.conf.default.forwarding=1'])
+            execute([sysctl_path, '-w', 'net.ipv4.ip_forward=1'])
+            execute([sysctl_path, '-w', 'net.ipv6.conf.default.forwarding=1'])
         srv.run()
     except BaseException, e:
         s = "Slave node aborting: %s\n" % str(e)
