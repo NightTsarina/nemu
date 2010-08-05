@@ -2,9 +2,9 @@
 # vim:ts=4:sw=4:et:ai:sts=4
 
 from test_util import get_devs, get_devs_netns
+from netns.environ import *
 import netns, test_util
-import os
-import unittest
+import os, unittest
 
 class TestUtils(unittest.TestCase):
     def test_utils(self):
@@ -80,7 +80,7 @@ class TestInterfaces(unittest.TestCase):
         self.assertTrue(devs[if0.name]['up'])
 
         # Verify that data is actually read from the kernel
-        r = node0.system(["ip", "link", "set", if0.name, "mtu", "1500"])
+        r = node0.system([ip_path, "link", "set", if0.name, "mtu", "1500"])
         self.assertEquals(r, 0)
         devs = get_devs_netns(node0)
         self.assertEquals(devs[if0.name]['mtu'], 1500)
@@ -126,8 +126,8 @@ class TestWithDummy(unittest.TestCase):
     def test_interface_migration(self):
         node = netns.Node()
         self.dummyname = "dummy%d" % os.getpid()
-        self.assertEquals(
-                os.system("ip link add name %s type dummy" % self.dummyname), 0)
+        self.assertEquals(os.system("%s link add name %s type dummy" %
+                    (ip_path, self.dummyname)), 0)
         devs = get_devs()
         self.assertTrue(self.dummyname in devs)
         dummyidx = devs[self.dummyname]['idx']
@@ -152,7 +152,7 @@ class TestWithDummy(unittest.TestCase):
     def tearDown(self):
         # oops here
         if hasattr(self, 'dummyname'):
-            os.system("ip link del %s" % self.dummyname)
+            os.system("%s link del %s" % (ip_path, self.dummyname))
 
 # FIXME: Links
 

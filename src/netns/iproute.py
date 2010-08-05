@@ -1,31 +1,7 @@
 # vim:ts=4:sw=4:et:ai:sts=4
 
 import copy, os, re, socket, subprocess, sys
-
-def _find_bin(name):
-    for pref in ("/", "/usr/", "/usr/local/"):
-        for d in ("bin/", "sbin/"):
-            try:
-                os.stat(pref + d + name)
-                return pref + d + name
-            except OSError, e:
-                if e.errno != os.errno.ENOENT:
-                    raise
-    raise RuntimeError("Cannot find `%s' command, impossible to continue." %
-            name)
-
-_ip = _find_bin("ip")
-_tc = _find_bin("tc")
-_brctl = _find_bin("brctl")
-# Seems this is completely bogus. At least, we can assume that the internal HZ
-# is bigger than this.
-_hz = os.sysconf("SC_CLK_TCK")
-
-try:
-    os.stat("/sys/class/net")
-except:
-    raise RuntimeError("Sysfs does not seem to be mounted, impossible to " +
-            "continue.")
+from netns.environ import *
 
 # helpers
 def _any_to_bool(any):
@@ -311,7 +287,7 @@ def get_if_data():
 
     In each dictionary, values are interface objects.
     """
-    ipcmd = subprocess.Popen([_ip, "-o", "link", "list"],
+    ipcmd = subprocess.Popen([ip_path, "-o", "link", "list"],
         stdout = subprocess.PIPE)
     ipdata = ipcmd.communicate()[0]
     assert ipcmd.wait() == 0
@@ -363,7 +339,7 @@ def create_if_pair(if1, if2):
         if iface[i].mtu:
             cmd[i] += ["mtu", str(iface[i].mtu)]
 
-    cmd = [_ip, "link", "add"] + cmd[0] + ["type", "veth", "peer"] + cmd[1]
+    cmd = [ip_path, "link", "add"] + cmd[0] + ["type", "veth", "peer"] + cmd[1]
     _execute(cmd)
     try:
         set_if(if1)
@@ -381,7 +357,7 @@ def create_if_pair(if1, if2):
 
 def del_if(iface):
     ifname = _get_if_name(iface)
-    _execute([_ip, "link", "del", ifname])
+    _execute([ip_path, "link", "del", ifname])
 
 def set_if(iface, recover = True):
     def do_cmds(cmds, orig_iface):
@@ -398,7 +374,7 @@ def set_if(iface, recover = True):
 
     # Name goes first
     if diff.name:
-        _ils = [_ip, "link", "set", "dev"]
+        _ils = [ip_path, "link", "set", "dev"]
         cmds = [_ils + [orig_iface.name, "name", diff.name]]
         if orig_iface.up:
             # iface needs to be down
@@ -407,7 +383,7 @@ def set_if(iface, recover = True):
         do_cmds(cmds, orig_iface)
 
     # I need to use the new name after a name change, duh!
-    _ils = [_ip, "link", "set", "dev", diff.name or orig_iface.name]
+    _ils = [ip_path, "link", "set", "dev", diff.name or orig_iface.name]
     cmds = []
     if diff.lladdr:
         if orig_iface.up:
@@ -432,12 +408,12 @@ def set_if(iface, recover = True):
 
 def change_netns(iface, netns):
     ifname = _get_if_name(iface)
-    _execute([_ip, "link", "set", "dev", ifname, "netns", str(netns)])
+    _execute([ip_path, "link", "set", "dev", ifname, "netns", str(netns)])
 
 # Address handling
 
 def get_addr_data():
-    ipcmd = subprocess.Popen([_ip, "-o", "addr", "list"],
+    ipcmd = subprocess.Popen([ip_path, "-o", "addr", "list"],
         stdout = subprocess.PIPE)
     ipdata = ipcmd.communicate()[0]
     assert ipcmd.wait() == 0
@@ -479,7 +455,7 @@ def add_addr(iface, address):
     addresses = get_addr_data()[1][ifname]
     assert address not in addresses
 
-    cmd = [_ip, "addr", "add", "dev", ifname, "local",
+    cmd = [ip_path, "addr", "add", "dev", ifname, "local",
             "%s/%d" % (address.address, int(address.prefix_len))]
     if hasattr(address, "broadcast"):
         cmd += ["broadcast", address.broadcast if address.broadcast else "+"]
@@ -490,7 +466,7 @@ def del_addr(iface, address):
     addresses = get_addr_data()[1][ifname]
     assert address in addresses
 
-    cmd = [_ip, "addr", "del", "dev", ifname, "local",
+    cmd = [ip_path, "addr", "del", "dev", ifname, "local",
             "%s/%d" % (address.address, int(address.prefix_len))]
     _execute(cmd)
 
@@ -564,7 +540,7 @@ def create_bridge(br):
     if isinstance(br, str):
         br = interface(name = br)
     assert br.name
-    _execute([_brctl, "addbr", br.name])
+    _execute([brctl_path, "addbr", br.name])
     try:
         set_if(br)
     except:
@@ -578,7 +554,7 @@ def create_bridge(br):
 
 def del_bridge(br):
     brname = _get_if_name(br)
-    _execute([_brctl, "delbr", brname])
+    _execute([brctl_path, "delbr", brname])
 
 def set_bridge(br, recover = True):
     def saveval(fname, val):
@@ -617,20 +593,20 @@ def set_bridge(br, recover = True):
 def add_bridge_port(br, iface):
     ifname = _get_if_name(iface)
     brname = _get_if_name(br)
-    _execute([_brctl, "addif", brname, ifname])
+    _execute([brctl_path, "addif", brname, ifname])
 
 def del_bridge_port(br, iface):
     ifname = _get_if_name(iface)
     brname = _get_if_name(br)
-    _execute([_brctl, "delif", brname, ifname])
+    _execute([brctl_path, "delif", brname, ifname])
 
 def get_all_route_data():
-    #ipcmd = subprocess.Popen([_ip, "-o", "route", "list", "table", "all"],
-    ipcmd = subprocess.Popen([_ip, "-o", "route", "list"],
+    #ipcmd = subprocess.Popen([ip_path, "-o", "route", "list", "table", "all"],
+    ipcmd = subprocess.Popen([ip_path, "-o", "route", "list"],
         stdout = subprocess.PIPE)
     ipdata = ipcmd.communicate()[0]
     assert ipcmd.wait() == 0
-    ipcmd = subprocess.Popen([_ip, "-o", "-f", "inet6", "route", "list"],
+    ipcmd = subprocess.Popen([ip_path, "-o", "-f", "inet6", "route", "list"],
         stdout = subprocess.PIPE)
     ipdata += ipcmd.communicate()[0]
     assert ipcmd.wait() == 0
@@ -678,7 +654,7 @@ def del_route(route):
     _add_del_route("del", route)
 
 def _add_del_route(action, route):
-    cmd = [_ip, "route", action]
+    cmd = [ip_path, "route", action]
     if route.tipe != "unicast":
         cmd += [route.tipe]
     if route.prefix:
@@ -694,7 +670,8 @@ def _add_del_route(action, route):
 # TC stuff
 
 def get_tc_tree():
-    tccmd = subprocess.Popen([_tc, "qdisc", "show"], stdout = subprocess.PIPE)
+    tccmd = subprocess.Popen([tc_path, "qdisc", "show"],
+            stdout = subprocess.PIPE)
     tcdata = tccmd.communicate()[0]
     assert tccmd.wait() == 0
 
@@ -852,7 +829,7 @@ def clear_tc(iface):
     if tcdata[iface.index] == None:
         return
     # Any other case, we clean
-    _execute([_tc, "qdisc", "del", "dev", iface.name, "root"])
+    _execute([tc_path, "qdisc", "del", "dev", iface.name, "root"])
 
 def set_tc(iface, bandwidth = None, delay = None, delay_jitter = None,
         delay_correlation = None, delay_distribution = None,
@@ -868,7 +845,7 @@ def set_tc(iface, bandwidth = None, delay = None, delay_jitter = None,
     commands = []
     if tcdata[iface.index] == 'foreign':
         # Avoid the overhead of calling tc+ip again
-        commands.append([_tc, "qdisc", "del", "dev", iface.name, "root"])
+        commands.append([tc_path, "qdisc", "del", "dev", iface.name, "root"])
         tcdata[iface.index] = {'qdiscs':  []}
 
     has_netem = 'netem' in tcdata[iface.index]['qdiscs']
@@ -884,18 +861,19 @@ def set_tc(iface, bandwidth = None, delay = None, delay_jitter = None,
     else:
         # Too much work to do better :)
         if has_netem or has_tbf:
-            commands.append([_tc, "qdisc", "del", "dev", iface.name, "root"])
+            commands.append([tc_path, "qdisc", "del", "dev", iface.name,
+                "root"])
         cmd = "add"
 
     if bandwidth:
         rate = "%dbit" % int(bandwidth)
         mtu = ifdata[iface.index].mtu
-        burst = max(mtu, int(bandwidth) / _hz)
+        burst = max(mtu, int(bandwidth) / hz)
         limit = burst * 2 # FIXME?
         handle = "1:"
         if cmd == "change":
             handle = "%d:" % int(tcdata[iface.index]["qdiscs"]["tbf"])
-        command = [_tc, "qdisc", cmd, "dev", iface.name, "root", "handle",
+        command = [tc_path, "qdisc", cmd, "dev", iface.name, "root", "handle",
                 handle, "tbf", "rate", rate, "limit", str(limit), "burst",
                 str(burst)]
         commands.append(command)
@@ -904,7 +882,7 @@ def set_tc(iface, bandwidth = None, delay = None, delay_jitter = None,
         handle = "2:"
         if cmd == "change":
             handle = "%d:" % int(tcdata[iface.index]["qdiscs"]["netem"])
-        command = [_tc, "qdisc", cmd, "dev", iface.name, "handle", handle]
+        command = [tc_path, "qdisc", cmd, "dev", iface.name, "handle", handle]
         if bandwidth:
             parent = "1:"
             if cmd == "change":

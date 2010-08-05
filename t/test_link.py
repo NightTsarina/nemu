@@ -2,7 +2,7 @@
 # vim:ts=4:sw=4:et:ai:sts=4
 
 import os, unittest
-import netns, test_util
+import netns, test_util, netns.environ
 
 class TestLink(unittest.TestCase):
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
@@ -46,7 +46,7 @@ class TestLink(unittest.TestCase):
         # Test strange rules handling
         os.system(("%s qd add dev %s root prio bands 3 " +
             "priomap 1 2 2 2 1 2 0 0 1 1 1 1 1 1 1 1") %
-            (netns.iproute._tc, i1.control.name))
+            (netns.environ.tc_path, i1.control.name))
         tcdata = netns.iproute.get_tc_data()[0]
         self.assertEquals(tcdata[i1.control.index], "foreign")
         l.set_parameters(bandwidth = 13107200) # 100 mbits

@@ -1,13 +1,11 @@
 #!/usr/bin/env python
 # vim:ts=4:sw=4:et:ai:sts=4
 
-import netns, test_util
+import netns, netns.environ, test_util
 import os, signal, subprocess, sys, time
 import unittest
 
 class TestNode(unittest.TestCase):
-#    def setUp(self):
-#        pass
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_node(self):
         node = netns.Node()
@@ -41,8 +39,8 @@ class TestNode(unittest.TestCase):
             link.connect(ifa)
             link.connect(ifb)
         def get_devs():
-            ipcmd = subprocess.Popen(["ip", "-o", "link", "list"],
-                    stdout = subprocess.PIPE)
+            ipcmd = subprocess.Popen([netns.environ.ip_path, "-o", "link",
+                "list"], stdout = subprocess.PIPE)
             (outdata, errdata) = ipcmd.communicate()
             ipcmd.wait()
             return outdata.split("\n")

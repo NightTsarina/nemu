@@ -3,6 +3,7 @@
 
 import os, re, subprocess, sys
 import netns.subprocess_
+from netns.environ import *
 
 def process_ipcmd(str):
     cur = None
@@ -53,13 +54,13 @@ def process_ipcmd(str):
     return out
 
 def get_devs():
-    ipcmd = subprocess.Popen(["ip", "addr", "list"],
+    ipcmd = subprocess.Popen([ip_path, "addr", "list"],
             stdout = subprocess.PIPE)
     (outdata, errdata) = ipcmd.communicate()
     return process_ipcmd(outdata)
 
 def get_devs_netns(node):
-    out = netns.subprocess_.backticks_raise(node, ["ip", "addr", "list"])
+    out = netns.subprocess_.backticks_raise(node, [ip_path, "addr", "list"])
     return process_ipcmd(out)
 
 def make_linux_ver(string):
