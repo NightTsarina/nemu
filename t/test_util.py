@@ -54,9 +54,7 @@ def process_ipcmd(str):
     return out
 
 def get_devs():
-    ipcmd = subprocess.Popen([ip_path, "addr", "list"],
-            stdout = subprocess.PIPE)
-    (outdata, errdata) = ipcmd.communicate()
+    outdata = backticks([ip_path, "addr", "list"])
     return process_ipcmd(outdata)
 
 def get_devs_netns(node):

@@ -38,31 +38,25 @@ class TestNode(unittest.TestCase):
             link = netns.Link()
             link.connect(ifa)
             link.connect(ifb)
-        def get_devs():
-            ipcmd = subprocess.Popen([netns.environ.ip_path, "-o", "link",
-                "list"], stdout = subprocess.PIPE)
-            (outdata, errdata) = ipcmd.communicate()
-            ipcmd.wait()
-            return outdata.split("\n")
 
         # Test automatic destruction
-        orig_devs = len(get_devs())
+        orig_devs = len(test_util.get_devs())
         create_stuff()
         self.assertEquals(netns.get_nodes(), [])
-        self.assertEquals(orig_devs, len(get_devs()))
+        self.assertEquals(orig_devs, len(test_util.get_devs()))
 
         # Test at_exit hooks
-        orig_devs = len(get_devs())
+        orig_devs = len(test_util.get_devs())
         chld = os.fork()
         if chld == 0:
             netns.set_cleanup_hooks(on_exit = True, on_signals = [])
             create_stuff()
             os._exit(0)
         os.waitpid(chld, 0)
-        self.assertEquals(orig_devs, len(get_devs()))
+        self.assertEquals(orig_devs, len(test_util.get_devs()))
 
         # Test signal hooks
-        orig_devs = len(get_devs())
+        orig_devs = len(test_util.get_devs())
         chld = os.fork()
         if chld == 0:
             netns.set_cleanup_hooks(on_exit = False,
@@ -72,7 +66,7 @@ class TestNode(unittest.TestCase):
                 time.sleep(10)
         os.kill(chld, signal.SIGTERM)
         os.waitpid(chld, 0)
-        self.assertEquals(orig_devs, len(get_devs()))
+        self.assertEquals(orig_devs, len(test_util.get_devs()))
 
 if __name__ == '__main__':
     unittest.main()
