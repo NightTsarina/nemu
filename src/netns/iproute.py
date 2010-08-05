@@ -272,6 +272,8 @@ def _get_if_name(iface):
 
 # XXX: ideally this should be replaced by netlink communication
 # Interface handling
+
+# FIXME: try to lower the amount of calls to retrieve data!!
 def get_if_data():
     """Gets current interface information. Returns a tuple (byidx, bynam) in
     which each element is a dictionary with the same data, but using different

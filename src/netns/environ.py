@@ -3,6 +3,7 @@
 import os, subprocess
 
 __all__ = ["ip_path", "tc_path", "brctl_path", "sysctl_path", "hz"]
+__all__ += ["tcpdump_path", "netperf_path"]
 __all__ += ["execute", "backticks"]
 
 def _find_bin(name):
@@ -14,13 +15,23 @@ def _find_bin(name):
             except OSError, e:
                 if e.errno != os.errno.ENOENT:
                     raise
-    raise RuntimeError("Cannot find `%s' command, impossible to continue." %
-            name)
+    return None
 
-ip_path = _find_bin("ip")
-tc_path = _find_bin("tc")
-brctl_path = _find_bin("brctl")
-sysctl_path = _find_bin("sysctl")
+def _find_bin_or_die(name):
+    r = _find_bin(name)
+    if not r:
+        raise RuntimeError("Cannot find `%s' command, impossible to " +
+                "continue." % name)
+    return r
+
+ip_path     = _find_bin_or_die("ip")
+tc_path     = _find_bin_or_die("tc")
+brctl_path  = _find_bin_or_die("brctl")
+sysctl_path = _find_bin_or_die("sysctl")
+
+# Optional tools
+tcpdump_path = _find_bin("tcpdump")
+netperf_path = _find_bin("netperf")
 
 # Seems this is completely bogus. At least, we can assume that the internal HZ
 # is bigger than this.
