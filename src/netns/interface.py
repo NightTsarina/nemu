@@ -47,6 +47,10 @@ class NSInterface(Interface):
     def __init__(self, node, index):
         super(NSInterface, self).__init__(index)
         self._slave = node._slave
+        # Disable auto-configuration
+        # you wish: need to take into account the nonetns mode; plus not
+        # touching some pre-existing ifaces
+        #node.system(['/sbin/sysctl', '-w', 'net.ipv6.conf.%s.autoconf=0' % self.name])
         node._add_interface(self)
 
     # some black magic to automatically get/set interface attributes

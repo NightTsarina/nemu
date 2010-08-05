@@ -162,7 +162,8 @@ def _start_child(debug, nonetns):
             unshare.unshare(unshare.CLONE_NEWNET)
             # Enable packet forwarding
             netns.iproute._execute(['sysctl', '-w', 'net.ipv4.ip_forward=1'])
-        # FIXME: ipv6?
+            netns.iproute._execute(['sysctl', '-w',
+                'net.ipv6.conf.default.forwarding=1'])
         srv.run()
     except BaseException, e:
         s = "Slave node aborting: %s\n" % str(e)
