@@ -69,8 +69,6 @@ class TestLink(unittest.TestCase):
         self._test_both()  # none  => both
         self._test_none()  # both  => none
 
-        # FIXME: more cases
-
     def _test_none(self):
         (n1, n2, i1, i2, l) = self.stuff 
         l.set_parameters()
