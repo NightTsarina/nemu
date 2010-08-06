@@ -20,8 +20,8 @@ def _find_bin(name):
 def _find_bin_or_die(name):
     r = _find_bin(name)
     if not r:
-        raise RuntimeError("Cannot find `%s' command, impossible to " +
-                "continue." % name)
+        raise RuntimeError(("Cannot find `%s' command, impossible to " +
+                "continue.") % name)
     return r
 
 ip_path     = _find_bin_or_die("ip")
