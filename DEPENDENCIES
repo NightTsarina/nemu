@@ -1,0 +1,5 @@
+python-yaml		PyYAML
+python-unshare
+python-passfd
+
+linux-kernel		linux-image	>= 2.6.35

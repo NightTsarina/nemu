@@ -6,11 +6,11 @@ from distutils.core import setup, Extension, Command
 setup(
         name        = 'netns',
         version     = '0.1',
-        description = 'foo',
+        description = 'A framework for creating emulated networks in a single host and run experiments on them',
 #        long_description = longdesc,
         author      = 'Martin Ferrari',
         author_email = 'martin.ferrari@gmail.com',
-#        url         = 'http://code.google.com/p/python-unshare/',
+        url         = 'http://yans.pl.sophia.inria.fr/code/hgwebdir.cgi/netns/',
         license     = 'GPLv2',
         platforms   = 'Linux',
         packages    = ['netns'],
