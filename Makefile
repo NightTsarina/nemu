@@ -1,5 +1,5 @@
 SRC = src
-TEST = t
+TEST = test
 BUILDDIR = build
 DISTDIR = dist
 
