@@ -17,6 +17,8 @@ class TestNode(unittest.TestCase):
         nodes = netns.get_nodes()
         self.assertEquals(nodes, [node])
 
+        self.assertTrue(node.get_interface("lo").up)
+
     @test_util.skip("Not implemented")
     def test_detect_fork(self):
         # Test that netns recognises a fork

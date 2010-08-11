@@ -27,6 +27,7 @@ class Node(object):
         self._pid = self._slave = None
         self._processes = weakref.WeakValueDictionary()
         self._interfaces = weakref.WeakValueDictionary()
+        self._auto_interfaces = [] # just to keep them alive!
 
         fd, pid = _start_child(debug, nonetns)
         self._pid = pid
@@ -35,6 +36,10 @@ class Node(object):
 
         Node._nodes[Node._nextnode] = self
         Node._nextnode += 1
+
+        # Bring loopback up
+        if not nonetns:
+            self.get_interface("lo").up = True
 
     def __del__(self):
         if self._debug: # pragma: no cover
@@ -99,16 +104,18 @@ class Node(object):
         del self._interfaces[iface.index]
         iface.destroy()
 
+    def get_interface(self, name):
+        return [i for i in self.get_interfaces() if i.name == name][0]
+
     def get_interfaces(self):
         if not self._slave:
             return []
         ifaces = self._slave.get_if_data()
-        ret = []
         for i in ifaces:
             if i not in self._interfaces:
-                ret.append(netns.interface.ForeignNodeInterface(self, i))
-            else:
-                ret.append(self._interfaces[i])
+                iface = netns.interface.ForeignNodeInterface( self, i)
+                self._auto_interfaces.append(iface) # keep it referenced!
+                self._interfaces[i] = iface
         # by the way, clean up _interfaces
         for i in list(self._interfaces): # copy before deleting!
             if i not in ifaces:
@@ -117,7 +124,7 @@ class Node(object):
                 self._interfaces[i].destroy()
                 del self._interfaces[i]
 
-        return sorted(ret, key = lambda x: x.index)
+        return sorted(self._interfaces.values(), key = lambda x: x.index)
 
     def route(self, tipe = 'unicast', prefix = None, prefix_len = 0,
             nexthop = None, interface = None, metric = 0):
