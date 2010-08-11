@@ -6,32 +6,37 @@ __all__ = ["ip_path", "tc_path", "brctl_path", "sysctl_path", "hz"]
 __all__ += ["tcpdump_path", "netperf_path"]
 __all__ += ["execute", "backticks"]
 
-def _find_bin(name):
+def find_bin(name):
+    search = []
+    if "PATH" in os.environ:
+        search += os.environ["PATH"].split(":")
     for pref in ("/", "/usr/", "/usr/local/"):
         for d in ("bin/", "sbin/"):
+            search.append(pref + d)
+    for d in search:
             try:
-                os.stat(pref + d + name)
-                return pref + d + name
+                os.stat(d + name)
+                return d + name
             except OSError, e:
                 if e.errno != os.errno.ENOENT:
                     raise
     return None
 
-def _find_bin_or_die(name):
-    r = _find_bin(name)
+def find_bin_or_die(name):
+    r = find_bin(name)
     if not r:
         raise RuntimeError(("Cannot find `%s' command, impossible to " +
                 "continue.") % name)
     return r
 
-ip_path     = _find_bin_or_die("ip")
-tc_path     = _find_bin_or_die("tc")
-brctl_path  = _find_bin_or_die("brctl")
-sysctl_path = _find_bin_or_die("sysctl")
+ip_path     = find_bin_or_die("ip")
+tc_path     = find_bin_or_die("tc")
+brctl_path  = find_bin_or_die("brctl")
+sysctl_path = find_bin_or_die("sysctl")
 
 # Optional tools
-tcpdump_path = _find_bin("tcpdump")
-netperf_path = _find_bin("netperf")
+tcpdump_path = find_bin("tcpdump")
+netperf_path = find_bin("netperf")
 
 # Seems this is completely bogus. At least, we can assume that the internal HZ
 # is bigger than this.
