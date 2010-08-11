@@ -295,11 +295,11 @@ void usage(FILE *f) {
         filler = sp;
 
     fprintf(f, "\n");
-    fprintf(f, "Usage: %s --client [--host HOST] [--port PORT] "
-            "[--pktsize BYTES]\n", progname);
-    fprintf(f, "       %s --server [--port PORT] [--max-time SECS] "
-            "[--max-pkts NUM]\n", progname);
-    fprintf(f, "       %s          [--max-bytes BYTES] [--verbose]\n", filler);
+    fprintf(f, "Usage: %s --client [--host=HOST] [--port=PORT] "
+            "[--pktsize=BYTES]\n", progname);
+    fprintf(f, "       %s --server [--port=PORT] [--max-time=SECS] "
+            "[--max-pkts=NUM]\n", progname);
+    fprintf(f, "       %s          [--max-bytes=BYTES] [--verbose]\n", filler);
 }
 
 int main(int argc, char *argv[]) {
