@@ -6,13 +6,16 @@ __all__ = ["ip_path", "tc_path", "brctl_path", "sysctl_path", "hz"]
 __all__ += ["tcpdump_path", "netperf_path"]
 __all__ += ["execute", "backticks"]
 
-def find_bin(name):
+def find_bin(name, extra_path = None):
     search = []
     if "PATH" in os.environ:
         search += os.environ["PATH"].split(":")
     for pref in ("/", "/usr/", "/usr/local/"):
         for d in ("bin/", "sbin/"):
             search.append(pref + d)
+    if extra_path:
+        search += extra_path
+
     for d in search:
             try:
                 os.stat(d + name)
@@ -22,7 +25,7 @@ def find_bin(name):
                     raise
     return None
 
-def find_bin_or_die(name):
+def find_bin_or_die(name, extra_path = None):
     r = find_bin(name)
     if not r:
         raise RuntimeError(("Cannot find `%s' command, impossible to " +
