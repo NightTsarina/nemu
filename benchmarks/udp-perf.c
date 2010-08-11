@@ -142,7 +142,7 @@ static uint64_t current_time(void) {
 }
 
 static void run_server(int port, uint64_t max_time, uint64_t max_pkts,
-        uint64_t max_bytes) {
+        uint64_t max_bytes, bool verbose) {
     struct sockaddr_in addr;
     int fd, cfd, serverfd, status;
     uint64_t now, last_ts, last_seq, preceived, breceived, errors;
@@ -190,6 +190,7 @@ static void run_server(int port, uint64_t max_time, uint64_t max_pkts,
         fatal("accept", "Unable to receive connection");
 
     preceived = breceived = errors = 0;
+    last_ts = last_seq = start = 0;
     tot_delay = max_delay = 0; min_delay = -1;
     while(true) {
         uint64_t ts = 0, seq = 0;
@@ -232,9 +233,9 @@ static void run_server(int port, uint64_t max_time, uint64_t max_pkts,
                 last_ts = ts;
                 last_seq = seq;
             }
-            if((max_pkts && preceived + errors > max_pkts) ||
-                    (max_time && now - start > max_time) ||
-                    (max_bytes && breceived > max_bytes))
+            if((max_pkts && preceived + errors >= max_pkts) ||
+                    (max_time && now - start >= max_time) ||
+                    (max_bytes && breceived >= max_bytes))
                 break;
         }
     }
@@ -249,12 +250,21 @@ static void run_server(int port, uint64_t max_time, uint64_t max_pkts,
     if(status == -1)
         fatal("close", "Unable to close socket");
 
-    printf("Received: %ld bytes %ld packets (size %ld) %ld errors.\n",
-            breceived, preceived, pkt_size, errors);
-    printf("Delay: %ld/%ld/%ld (min/avg/max). Time: %ld us\n",
-            min_delay, tot_delay / preceived, max_delay, now - start);
-    printf("Bandwidth: %ld bit/s.\n",
-            (long)(1.0L * (breceived * 8000000) / (now - start)));
+    if(verbose) {
+        printf("Received: %ld bytes %ld packets (size %ld) %ld errors.\n",
+                breceived, preceived, pkt_size, errors);
+        printf("Delay: %ld/%ld/%ld (min/avg/max). Time: %ld us\n",
+                min_delay, tot_delay / preceived, max_delay, now - start);
+        printf("Bandwidth: %ld bit/s.\n",
+                (long)(1.0L * (breceived * 8000000) / (now - start)));
+    } else {
+        printf("brx:%ld prx:%ld ps:%ld err:%ld ",
+                breceived, preceived, pkt_size, errors);
+        printf("mind:%ld avgd:%ld maxd:%ld time:%ld ",
+                min_delay, tot_delay / preceived, max_delay, now - start);
+        printf("bw:%ld\n",
+                (long)(1.0L * (breceived * 8000000) / (now - start)));
+    }
 
     status = close(fd);
     if(status == -1)
@@ -281,7 +291,7 @@ int main(int argc, char *argv[]) {
     int pkt_size = 1500;
     int port = 5000;
     const char *to_ip = "127.0.0.1";
-    bool client = false;
+    bool client = false, verbose = false;
     char **arg = argv + 1;
     for(; *arg != 0; arg++)
     {
@@ -295,6 +305,10 @@ int main(int argc, char *argv[]) {
             client = true;
             continue;
         }
+        if(strcmp(*arg, "--verbose") == 0) {
+            verbose = true;
+            continue;
+        }
         fprintf(stderr, "Unknown parameter: %s\n", *arg);
         exit(1);
     }
@@ -304,6 +318,6 @@ int main(int argc, char *argv[]) {
     if(client)
         run_client(to_ip, port, pkt_size);
     else
-        run_server(port, max_time, max_pkts, max_bytes);
+        run_server(port, max_time, max_pkts, max_bytes, verbose);
     return 0;
 }
