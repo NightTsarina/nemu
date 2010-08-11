@@ -1,14 +1,13 @@
 #!/usr/bin/env python
 # vim:ts=4:sw=4:et:ai:sts=4
 
-try: # pragma: no cover
-    from yaml import CLoader as Loader
-    from yaml import CDumper as Dumper
-except ImportError:
-    from yaml import Loader, Dumper
-
-import base64, os, passfd, re, signal, sys, traceback, unshare, yaml
+import base64, os, passfd, re, signal, sys, traceback, unshare
 import netns.subprocess_, netns.iproute
+
+try:
+    from cPickle import loads, dumps
+except:
+    from pickle import loads, dumps
 
 # ============================================================================
 # Server-side protocol implementation
@@ -174,8 +173,7 @@ class Server(object):
                     return None
             elif argstemplate[j] == 'b':
                 try:
-                    if args[i][0] == '=':
-                        args[i] = base64.b64decode(args[i][1:])
+                    args[i] = _db64(args[i])
                 except TypeError:
                     self.reply(500, "Invalid parameter: not base-64 encoded.")
                     return None
@@ -203,7 +201,8 @@ class Server(object):
                 (t, v, tb) = sys.exc_info()
                 v.child_traceback = "".join(
                         traceback.format_exception(t, v, tb))
-                self.reply(550, yaml.dump(v))
+                self.reply(550, ["# Exception data follows:",
+                    _b64(dumps(v, protocol = 2))])
         try:
             self._rfd.close()
             self._wfd.close()
@@ -327,8 +326,8 @@ class Server(object):
             ifdata = netns.iproute.get_if_data()[0]
         else:
             ifdata = netns.iproute.get_if(ifnr)
-        self.reply(200, ["# Interface data follows."] +
-                yaml.dump(ifdata).split("\n"))
+        self.reply(200, ["# Interface data follows.",
+                _b64(dumps(ifdata, protocol = 2))])
 
     def do_IF_SET(self, cmdname, ifnr, *args):
         if len(args) % 2:
@@ -355,8 +354,8 @@ class Server(object):
         addrdata = netns.iproute.get_addr_data()[0]
         if ifnr != None:
             addrdata = addrdata[ifnr]
-        self.reply(200, ["# Address data follows."] +
-                yaml.dump(addrdata).split("\n"))
+        self.reply(200, ["# Address data follows.",
+            _b64(dumps(addrdata, protocol = 2))])
 
     def do_ADDR_ADD(self, cmdname, ifnr, address, prefixlen, broadcast = None):
         if address.find(":") < 0: # crude, I know
@@ -376,8 +375,8 @@ class Server(object):
 
     def do_ROUT_LIST(self, cmdname):
         rdata = netns.iproute.get_route_data()
-        self.reply(200, ["# Routing data follows."] +
-                yaml.dump(rdata).split("\n"))
+        self.reply(200, ["# Routing data follows.",
+            _b64(dumps(rdata, protocol = 2))])
 
     def do_ROUT_ADD(self, cmdname, tipe, prefix, prefixlen, nexthop, ifnr,
             metric):
@@ -442,7 +441,7 @@ class Client(object):
         defaults to 2."""
         code, text = self._read_reply()
         if code == 550: # exception
-            e = yaml.load(text)
+            e = loads(_db64(text.partition("\n")[2]))
             raise e
         if code / 100 != expected:
             raise RuntimeError("Error from slave: %d %s" % (code, text))
@@ -562,7 +561,7 @@ class Client(object):
         else:
             self._send_cmd("IF", "LIST")
         data = self._read_and_check_reply()
-        return yaml.load(data)
+        return loads(_db64(data.partition("\n")[2]))
 
     def set_if(self, interface):
         cmd = ["IF", "SET", interface.index]
@@ -588,8 +587,7 @@ class Client(object):
         else:
             self._send_cmd("ADDR", "LIST")
         data = self._read_and_check_reply()
-        data = data.partition("\n")[2] # ignore first line
-        return yaml.load(data)
+        return loads(_db64(data.partition("\n")[2]))
 
     def add_addr(self, ifnr, address):
         if hasattr(address, "broadcast") and address.broadcast:
@@ -607,7 +605,7 @@ class Client(object):
     def get_route_data(self):
         self._send_cmd("ROUT", "LIST")
         data = self._read_and_check_reply()
-        return yaml.load(data)
+        return loads(_db64(data.partition("\n")[2]))
 
     def add_route(self, route):
         self._add_del_route("ADD", route)
@@ -632,6 +630,11 @@ def _b64(text):
         return "=" + base64.b64encode(text)
     else:
         return text
+
+def _db64(text):
+    if not text or text[0] != '=':
+        return text
+    return base64.b64decode(text[1:])
 
 def _get_file(fd, mode):
     # XXX: In some cases we do not call dup(); maybe this should be consistent?

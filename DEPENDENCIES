@@ -1,5 +1,7 @@
-python-yaml		PyYAML
-python-unshare
-python-passfd
+Required packages for using netns
+=================================
 
-linux-kernel		linux-image	>= 2.6.35
+python-unshare		http://pypi.python.org/pypi/python-unshare
+python-passfd		http://pypi.python.org/pypi/python-passfd
+
+linux-kernel >= 2.6.35	http://kernel.org/
