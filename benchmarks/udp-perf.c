@@ -286,13 +286,35 @@ static void run_server(int port, uint64_t max_time, uint64_t max_pkts,
         continue;                                               \
     }
 
+static char *progname;
+void usage(FILE *f) {
+    char *filler, *sp = "                    ";
+    if(strlen(progname) < strlen(sp))
+        filler = sp + strlen(sp) - strlen(progname);
+    else
+        filler = sp;
+
+    fprintf(f, "\n");
+    fprintf(f, "Usage: %s --client [--host HOST] [--port PORT] "
+            "[--pktsize BYTES]\n", progname);
+    fprintf(f, "       %s --server [--port PORT] [--max-time SECS] "
+            "[--max-pkts NUM]\n", progname);
+    fprintf(f, "       %s          [--max-bytes BYTES] [--verbose]\n", filler);
+}
+
 int main(int argc, char *argv[]) {
     uint64_t max_time = 0, max_pkts = 0, max_bytes = 0;
-    int pkt_size = 1500;
-    int port = 5000;
+    int pkt_size = 1500, port = 5000;
     const char *to_ip = "127.0.0.1";
-    bool client = false, verbose = false;
+    bool server = false, client = false, verbose = false;
     char **arg = argv + 1;
+
+    progname = strrchr(argv[0], '/');
+    if(progname)
+        progname++; /* skip over the slash */
+    else
+        progname = argv[0];
+
     for(; *arg != 0; arg++)
     {
         CHECK_INT_ARG(*arg, "pktsize", pkt_size);
@@ -301,6 +323,10 @@ int main(int argc, char *argv[]) {
         CHECK_LLINT_ARG(*arg, "max-pkts", max_pkts);
         CHECK_LLINT_ARG(*arg, "max-bytes", max_bytes);
         CHECK_STR_ARG(*arg, "host", to_ip);
+        if(strcmp(*arg, "--server") == 0) {
+            server = true;
+            continue;
+        }
         if(strcmp(*arg, "--client") == 0) {
             client = true;
             continue;
@@ -309,7 +335,18 @@ int main(int argc, char *argv[]) {
             verbose = true;
             continue;
         }
+        if(strcmp(*arg, "--help") == 0) {
+            usage(stdout);
+            exit(0);
+        }
         fprintf(stderr, "Unknown parameter: %s\n", *arg);
+        usage(stderr);
+        exit(1);
+    }
+    if(client == server) {
+        fprintf(stderr,
+                "Exactly one of --client and --server must be specified.\n");
+        usage(stderr);
         exit(1);
     }
     if(!(max_time || max_pkts || max_bytes))
