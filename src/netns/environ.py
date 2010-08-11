@@ -11,15 +11,15 @@ def find_bin(name, extra_path = None):
     if "PATH" in os.environ:
         search += os.environ["PATH"].split(":")
     for pref in ("/", "/usr/", "/usr/local/"):
-        for d in ("bin/", "sbin/"):
+        for d in ("bin", "sbin"):
             search.append(pref + d)
     if extra_path:
         search += extra_path
 
     for d in search:
             try:
-                os.stat(d + name)
-                return d + name
+                os.stat(d + "/" + name)
+                return d + "/" + name
             except OSError, e:
                 if e.errno != os.errno.ENOENT:
                     raise
