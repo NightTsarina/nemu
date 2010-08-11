@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # vim: ts=4:sw=4:et:ai:sts=4
 
-import getopt, netns, os.path, re, sys
+import getopt, netns, os, os.path, re, select, subprocess, sys
 
 __doc__ = """Creates a linear network topology, and measures the maximum
 end-to-end throughput for the specified packet size."""
@@ -34,7 +34,7 @@ def main():
     except getopt.GetoptError, err:
         error = str(err) # opts will be empty
 
-    pktsize = nr = time = packets = bytes = None
+    pktsize = nr = time = packets = nbytes = None
     use_p2p = False
     delay = jitter = bandwidth = None
 
@@ -51,7 +51,7 @@ def main():
         elif o in ("-p", "--packets"):
             packets = int(a)
         elif o in ("--bytes"):
-            bytes = int(a)
+            nbytes = int(a)
         elif o in ("--delay"):
             delay = float(a)
         elif o in ("--jitter"):
@@ -82,17 +82,53 @@ def main():
         usage(sys.stderr)
         sys.exit(2)
 
-    if not (time or bytes or packets):
+    if not (time or nbytes or packets):
         time = 10
+
+    udp_perf = netns.environ.find_bin("udp-perf",
+            extra_path = [".", os.path.dirname(sys.argv[0])])
+    if not udp_perf:
+        raise RuntimeError("Cannot find `udp-perf'")
 
     nodes, interfaces, links = create_topo(nr, use_p2p, delay, jitter,
             bandwidth)
 
-    #nodes[0].system("ping -c 30 -i 1.2 -w 60 -s 1400 %s" % dec2ip(ip2dec("10.0.0.2") + 4 * (nr - 2)))
-    p=nodes[0].Popen(["iperf", "-s", "-u"])
-    nodes[nr-1].system("iperf -c 10.0.0.1 -u -b 10000M")
-    p.signal()
-    p.wait()
+    cmdline = [udp_perf, "--server"]
+    if time:
+        cmdline.append("--max-time=%d" % time)
+    if packets:
+        cmdline.append("--max-pkts=%d" % packets)
+    if nbytes:
+        cmdline.append("--max-bytes=%d" % nbytes)
+
+    srv = nodes[0].Popen(cmdline, stdout = subprocess.PIPE)
+
+    cmdline = [udp_perf, "--client", "--pktsize=%d" % pktsize]
+    if nr > 1:
+        cmdline.append("--host=10.0.0.1")
+    clt = nodes[nr - 1].Popen(cmdline)
+
+    out = ""
+    while(True):
+        ready = select.select([srv.stdout], [], [], 0.1)[0]
+        if ready:
+            r = os.read(srv.stdout.fileno(), 1024)
+            if not r:
+                break
+            out += r
+        if srv.poll() != None or clt.poll() != None:
+            break
+
+    if srv.poll():
+        raise RuntimeError("upd-perf server returned with error.")
+
+    if clt.poll():
+        raise RuntimeError("upd-perf client returned with error.")
+
+    srv.wait()
+    clt.wait()
+
+    print out.strip()
 
 def ip2dec(ip):
     match = re.search(r'^(\d+)\.(\d+)\.(\d+)\.(\d+)$', ip)
