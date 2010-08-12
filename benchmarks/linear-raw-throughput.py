@@ -49,6 +49,9 @@ def main():
             sys.exit(0)
         elif o in ("-n", "--nodes"):
             nr = int(a)
+            if nr > 65:
+                error = "Invalid value for %s: %s" % (o, a)
+                break
         elif o in ("-s", "--pktsize"):
             pktsize = int(a)
         elif o in ("-t", "--time"):
@@ -68,7 +71,7 @@ def main():
             continue # avoid the value check
         elif o == "--format":
             if a not in ('csv', 'brief', 'verbose'):
-                error = "Invalid format: %s" % a
+                error = "Invalid value for %s: %s" % (o, a)
                 break
             format = a
             continue
