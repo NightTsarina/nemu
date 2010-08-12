@@ -1,16 +1,16 @@
 #!/usr/bin/env python
 # vim: ts=4:sw=4:et:ai:sts=4
 
-import getopt, netns, os, os.path, re, select, subprocess, sys
+import csv, getopt, netns, os, os.path, re, select, subprocess, sys
 
 __doc__ = """Creates a linear network topology, and measures the maximum
 end-to-end throughput for the specified packet size."""
 
 def usage(f):
-    f.write("Usage: %s --nodes=<n> --pktsize=<n> [OPTIONS]\n\n%s\n\n" %
+    f.write("Usage: %s --nodes=NUM --pktsize=BYTES [OPTIONS]\n%s\n\n" %
             (os.path.basename(sys.argv[0]), __doc__))
     f.write("Mandatory arguments:\n")
-    f.write("  -n, --nodes=NODES        Number of nodes to create\n")
+    f.write("  -n, --nodes=NUM          Number of nodes to create\n")
     f.write("  -s, --pktsize=BYTES      Size of packet payload\n\n")
 
     f.write("Topology configuration:\n")
@@ -22,7 +22,11 @@ def usage(f):
     f.write("How long should the benchmark run (defaults to -t 10):\n")
     f.write("  -t, --time=SECS          Stop after SECS seconds\n")
     f.write("  -p, --packets=NUM        Stop after NUM packets\n")
-    f.write("  -b, --bytes=BYTES        Stop after BYTES bytes sent\n")
+    f.write("  -b, --bytes=BYTES        Stop after BYTES bytes sent\n\n")
+
+    f.write("Output format:\n")
+    f.write("  --format=FMT             Valid values are `csv', `brief', " +
+            "and `verbose'\n")
 
 def main():
     error = None
@@ -30,13 +34,14 @@ def main():
     try:
         opts, args = getopt.getopt(sys.argv[1:], "hn:s:t:p:b:", [
             "help", "nodes=", "pktsize=", "time=", "packets=", "bytes=",
-            "use-p2p", "delay=", "jitter=", "bandwidth=" ])
+            "use-p2p", "delay=", "jitter=", "bandwidth=", "format=" ])
     except getopt.GetoptError, err:
         error = str(err) # opts will be empty
 
     pktsize = nr = time = packets = nbytes = None
-    use_p2p = False
     delay = jitter = bandwidth = None
+    use_p2p = False
+    format = "verbose"
 
     for o, a in opts:
         if o in ("-h", "--help"):
@@ -61,6 +66,12 @@ def main():
         elif o in ("--use-p2p"):
             use_p2p = True
             continue # avoid the value check
+        elif o == "--format":
+            if a not in ('csv', 'brief', 'verbose'):
+                error = "Invalid format: %s" % a
+                break
+            format = a
+            continue
         else:
             raise RuntimeError("Cannot happen")
         # In all cases, I take a number
@@ -78,8 +89,10 @@ def main():
             error = "Cannot use link emulation with P2P links"
 
     if error:
-        sys.stderr.write("%s: %s\n\n" % (os.path.basename(sys.argv[0]), error))
-        usage(sys.stderr)
+        sys.stderr.write("%s: %s\n" % (os.path.basename(sys.argv[0]), error))
+        sys.stderr.write("Try `%s --help' for more information.\n" %
+                os.path.basename(sys.argv[0]))
+        #usage(sys.stderr)
         sys.exit(2)
 
     if not (time or nbytes or packets):
@@ -100,6 +113,8 @@ def main():
         cmdline.append("--max-pkts=%d" % packets)
     if nbytes:
         cmdline.append("--max-bytes=%d" % nbytes)
+    if format == "verbose":
+        cmdline.append("--verbose")
 
     srv = nodes[0].Popen(cmdline, stdout = subprocess.PIPE)
 
@@ -128,7 +143,17 @@ def main():
     srv.wait()
     clt.wait()
 
-    print out.strip()
+    out = out.strip()
+
+    if format != "csv":
+        print "Command line: %s" % (" ".join(sys.argv[1:]))
+        print out.strip()
+        return
+
+    data = out.split(" ")
+    data = map(lambda s: s.partition(":")[2], data)
+    writer = csv.writer(sys.stdout)
+    writer.writerow([" ".join(sys.argv[1:])] + data)
 
 def ip2dec(ip):
     match = re.search(r'^(\d+)\.(\d+)\.(\d+)\.(\d+)$', ip)
