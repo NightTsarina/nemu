@@ -16,6 +16,7 @@
 #include <errno.h>
 #include <fcntl.h>
 
+#define HDR_SIZE (14 + 20 + 8) /* eth + ip + udp headers */
 static uint64_t current_time(void);
 
 static void fatal(const char *func, const char *detailed) {
@@ -41,6 +42,10 @@ static void run_client(const char *to_ip, unsigned to_port, unsigned pkt_size) {
     uint64_t seq;
     struct sockaddr_in addr, to;
     void *buffer;
+
+    if(pkt_size < HDR_SIZE)
+        fatal(NULL, "Cannot send packets that small.");
+    pkt_size -= HDR_SIZE;
 
     buffer = malloc(pkt_size);
     if(! buffer)
@@ -147,7 +152,7 @@ static void run_server(int port, uint64_t max_time, uint64_t max_pkts,
     int fd, cfd, serverfd, status;
     uint64_t now, last_ts, last_seq, preceived, breceived, errors;
     uint64_t start, tot_delay, max_delay, min_delay, last_delay;
-    ssize_t pkt_size = 0, buffer_sz = 1 << 17; /* should be enough */
+    ssize_t pkt_size = -1, buffer_sz = 1 << 17; /* should be enough */
     void *buffer;
     uint64_t magic = 0xdeadbeef;
 
@@ -204,7 +209,7 @@ static void run_server(int port, uint64_t max_time, uint64_t max_pkts,
         if(received >= 8)
             seq = ((uint64_t *)buffer)[1];
 
-        if(! pkt_size) {
+        if(pkt_size == -1) {
             /* init */
             pkt_size = received;
             last_ts = ts;
@@ -218,6 +223,7 @@ static void run_server(int port, uint64_t max_time, uint64_t max_pkts,
             } else {
                 preceived++;
                 breceived += received;
+                breceived += HDR_SIZE;
                 if(ts) {
                     last_delay = now - ts;
                     tot_delay += last_delay;
