@@ -113,9 +113,9 @@ static void run_client(const char *to_ip, unsigned to_port, unsigned pkt_size) {
         }
 
         now = current_time();
-        if(pkt_size >= 4)
+        if(pkt_size >= sizeof(uint64_t))
             ((uint64_t *)buffer)[0] = now;
-        if(pkt_size >= 8)
+        if(pkt_size >= 2 * sizeof(uint64_t))
             ((uint64_t *)buffer)[1] = seq;
 
         written = sendto(fd, buffer, pkt_size, 0, (struct sockaddr *)&to,
@@ -152,6 +152,7 @@ static void run_server(int port, uint64_t max_time, uint64_t max_pkts,
     int fd, cfd, serverfd, status;
     uint64_t now, last_ts, last_seq, preceived, breceived, errors;
     uint64_t start, tot_delay, max_delay, min_delay, last_delay;
+    double jitter = 0.0L;
     ssize_t pkt_size = -1, buffer_sz = 1 << 17; /* should be enough */
     void *buffer;
     uint64_t magic = 0xdeadbeef;
@@ -196,7 +197,7 @@ static void run_server(int port, uint64_t max_time, uint64_t max_pkts,
 
     preceived = breceived = errors = 0;
     last_ts = last_seq = start = 0;
-    tot_delay = max_delay = 0; min_delay = -1;
+    tot_delay = max_delay = 0; last_delay = min_delay = -1;
     while(true) {
         uint64_t ts = 0, seq = 0;
         ssize_t received;
@@ -204,13 +205,13 @@ static void run_server(int port, uint64_t max_time, uint64_t max_pkts,
         received = recvfrom(fd, buffer, buffer_sz, 0, 0, 0);
         now = current_time();
 
-        if(received >= 4)
+        if(received >= sizeof(uint64_t))
             ts = ((uint64_t *)buffer)[0];
-        if(received >= 8)
+        if(received >= 2 * sizeof(uint64_t))
             seq = ((uint64_t *)buffer)[1];
 
         if(pkt_size == -1) {
-            /* init */
+            /* init: first packet is ignored */
             pkt_size = received;
             last_ts = ts;
             last_seq = seq;
@@ -225,6 +226,14 @@ static void run_server(int port, uint64_t max_time, uint64_t max_pkts,
                 breceived += received;
                 breceived += HDR_SIZE;
                 if(ts) {
+                    if(last_delay >= 0) {
+                        double delta;
+                        if(last_delay > now - ts)
+                            delta = last_delay - (now - ts);
+                        else
+                            delta = (now - ts) - last_delay;
+                        jitter += (delta - jitter) / 16.0;
+                    }
                     last_delay = now - ts;
                     tot_delay += last_delay;
                     if(last_delay < min_delay)
@@ -259,15 +268,17 @@ static void run_server(int port, uint64_t max_time, uint64_t max_pkts,
     if(verbose) {
         printf("Received: %ld bytes %ld packets (size %ld/%ld) %ld errors.\n",
                 breceived, preceived, pkt_size + HDR_SIZE, pkt_size, errors);
-        printf("Delay: %ld/%ld/%ld (min/avg/max). Time: %ld us\n",
-                min_delay, tot_delay / preceived, max_delay, now - start);
+        printf("Delay: %ld/%ld/%ld (min/avg/max). Jitter: %lf. Time: %ld us\n",
+                min_delay, tot_delay / preceived, max_delay, jitter,
+                now - start);
         printf("Bandwidth: %ld bit/s.\n",
                 (long)(1.0L * (breceived * 8000000) / (now - start)));
     } else {
         printf("brx:%ld prx:%ld pksz:%ld plsz:%ld err:%ld ",
                 breceived, preceived, pkt_size + HDR_SIZE, pkt_size, errors);
-        printf("mind:%ld avgd:%ld maxd:%ld time:%ld ",
-                min_delay, tot_delay / preceived, max_delay, now - start);
+        printf("mind:%ld avgd:%ld maxd:%ld jit:%lf time:%ld ",
+                min_delay, tot_delay / preceived, max_delay, jitter,
+                now - start);
         printf("bw:%ld\n",
                 (long)(1.0L * (breceived * 8000000) / (now - start)));
     }
