@@ -257,15 +257,15 @@ static void run_server(int port, uint64_t max_time, uint64_t max_pkts,
         fatal("close", "Unable to close socket");
 
     if(verbose) {
-        printf("Received: %ld bytes %ld packets (size %ld) %ld errors.\n",
-                breceived, preceived, pkt_size, errors);
+        printf("Received: %ld bytes %ld packets (size %ld/%ld) %ld errors.\n",
+                breceived, preceived, pkt_size + HDR_SIZE, pkt_size, errors);
         printf("Delay: %ld/%ld/%ld (min/avg/max). Time: %ld us\n",
                 min_delay, tot_delay / preceived, max_delay, now - start);
         printf("Bandwidth: %ld bit/s.\n",
                 (long)(1.0L * (breceived * 8000000) / (now - start)));
     } else {
-        printf("brx:%ld prx:%ld ps:%ld err:%ld ",
-                breceived, preceived, pkt_size, errors);
+        printf("brx:%ld prx:%ld pksz:%ld plsz:%ld err:%ld ",
+                breceived, preceived, pkt_size + HDR_SIZE, pkt_size, errors);
         printf("mind:%ld avgd:%ld maxd:%ld time:%ld ",
                 min_delay, tot_delay / preceived, max_delay, now - start);
         printf("bw:%ld\n",
