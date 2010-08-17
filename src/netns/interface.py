@@ -3,7 +3,7 @@
 import os, weakref
 import netns.iproute
 
-__all__ = ['NodeInterface', 'P2PInterface', 'ForeignInterface',
+__all__ = ['NodeInterface', 'P2PInterface', 'ImportedInterface',
 'ForeignNodeInterface', 'ImportedNodeInterface', 'Link']
 
 class Interface(object):
@@ -268,15 +268,17 @@ class SlaveInterface(ExternalInterface):
     def destroy(self):
         pass
 
-class ForeignInterface(ExternalInterface):
-    """Class to handle already existing interfaces. This kind of interfaces can
-    only be connected to Link objects and not assigned to a name space.
-    On destruction, the code will try to restore the interface to the state it
-    was in before being imported into netns."""
+class ImportedInterface(ExternalInterface):
+    """Class to handle already existing interfaces. Analogous to
+    ImportedNodeInterface, this class only differs in that the interface is not
+    migrated inside the name space. This kind of interfaces can only be
+    connected to Link objects and not assigned to a name space.  On
+    destruction, the code will try to restore the interface to the state it was
+    in before being imported into netns."""
     def __init__(self, iface):
         iface = netns.iproute.get_if(iface)
         self._original_state = iface.copy()
-        super(ForeignInterface, self).__init__(iface.index)
+        super(ImportedInterface, self).__init__(iface.index)
 
     # FIXME: register somewhere for destruction!
     def destroy(self): # override: restore as much as possible
