@@ -5,7 +5,7 @@ import os, socket, sys, traceback, unshare, weakref
 from netns.environ import *
 import netns.protocol, netns.subprocess_
 
-__all__ = ['Node', 'get_nodes']
+__all__ = ['Node', 'get_nodes', 'import_if']
 
 class Node(object):
     _nodes = weakref.WeakValueDictionary()
@@ -189,4 +189,4 @@ def _start_child(debug, nonetns):
     # NOTREACHED
 
 get_nodes = Node.get_nodes
-
+import_if = netns.interface.ImportedInterface(interface)
