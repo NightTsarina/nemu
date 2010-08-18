@@ -4,7 +4,7 @@ import os, weakref
 import netns.iproute
 
 __all__ = ['NodeInterface', 'P2PInterface', 'ImportedInterface',
-'ForeignNodeInterface', 'ImportedNodeInterface', 'Link']
+'ImportedNodeInterface', 'Switch']
 
 class Interface(object):
     """Just a base class for the *Interface classes: assign names and handle
@@ -39,7 +39,7 @@ class Interface(object):
     @property
     def control(self):
         """Associated interface in the main name space (if it exists). Only
-        control interfaces can be put into a Link, for example."""
+        control interfaces can be put into a Switch, for example."""
         return None
 
 class NSInterface(Interface):
@@ -102,7 +102,7 @@ class NSInterface(Interface):
 
 class NodeInterface(NSInterface):
     """Class to create and handle a virtual interface inside a name space, it
-    can be connected to a Link object with emulation of link
+    can be connected to a Switch object with emulation of link
     characteristics."""
     def __init__(self, node):
         """Create a new interface. `node' is the name space in which this
@@ -131,7 +131,7 @@ class NodeInterface(NSInterface):
 
 class P2PInterface(NSInterface):
     """Class to create and handle point-to-point interfaces between name
-    spaces, without using Link objects. Those do not allow any kind of traffic
+    spaces, without using Switch objects. Those do not allow any kind of traffic
     shaping.
     As two interfaces need to be created, instead of using the class
     constructor, use the P2PInterface.create_pair() static method."""
@@ -168,45 +168,39 @@ class P2PInterface(NSInterface):
                 self._slave.del_if(self.index)
             self._slave = None
 
-class ForeignNodeInterface(NSInterface):
-    """Class to handle already existing interfaces inside a name space, usually
-    just the loopback device, but it can be other user-created interfaces. On
-    destruction, the code will try to restore the interface to the state it was
-    in before being imported into netns."""
-    def __init__(self, node, iface):
-        iface = node._slave.get_if_data(iface)
-        self._original_state = iface.copy()
-        super(ForeignNodeInterface, self).__init__(node, iface.index)
-
-    # FIXME: register somewhere for destruction!
-    def destroy(self): # override: restore as much as possible
-        if self._slave:
-            if self.index in self._slave.get_if_data():
-                self._slave.set_if(self._original_state)
-            self._slave = None
-
 class ImportedNodeInterface(NSInterface):
-    """Class to handle already existing interfaces that are migrated inside a
-    name space: real devices, tun devices, etc.  On destruction, the interface
-    will be restored to the original name space and will try to restore the
-    original state."""
-    def __init__(self, node, iface):
-        iface = netns.iproute.get_if(iface)
-        self._original_state = iface.copy()
+    """Class to handle already existing interfaces inside a name spac: 
+    real devices, tun devices, etc.
+    The flag 'migrate' in the constructor indicates that the interface was migrated 
+    inside the name space. 
+    On destruction, the interface will be restored to the original name space and 
+    will try to restore the original state."""
+    def __init__(self, node, iface, migrate = False):
+        self._migrate = migrate
+        if self._migrate:
+            iface = node._slave.get_if_data(iface)
+            self._original_state = iface.copy()
+        else:
+            iface = netns.iproute.get_if(iface)
+            self._original_state = iface.copy()
 
-        # Change the name to avoid clashes
-        iface.name = self._gen_if_name()
-        netns.iproute.set_if(iface)
+            # Change the name to avoid clashes
+            iface.name = self._gen_if_name()
+            netns.iproute.set_if(iface)
 
-        netns.iproute.change_netns(iface, node.pid)
+            netns.iproute.change_netns(iface, node.pid)
         super(ImportedNodeInterface, self).__init__(node, iface.index)
 
     def destroy(self): # override: restore as much as possible
-        if self._slave:
+        if self._slave:            
             if self.index in self._slave.get_if_data():
-                self._slave.change_netns(self.index, os.getpid())
-            # else, assume it is in the main name space
-            netns.iproute.set_if(self._original_state)
+                if self._migrate:
+                    self._slave.set_if(self._original_state)
+                else:
+                    self._slave.change_netns(self.index, os.getpid())
+            if not self._migrate:
+                # else, assume it is in the main name space
+                netns.iproute.set_if(self._original_state)
             self._slave = None
 
 class ExternalInterface(Interface):
@@ -272,7 +266,7 @@ class ImportedInterface(ExternalInterface):
     """Class to handle already existing interfaces. Analogous to
     ImportedNodeInterface, this class only differs in that the interface is not
     migrated inside the name space. This kind of interfaces can only be
-    connected to Link objects and not assigned to a name space.  On
+    connected to Switch objects and not assigned to a name space.  On
     destruction, the code will try to restore the interface to the state it was
     in before being imported into netns."""
     def __init__(self, iface):
@@ -286,20 +280,20 @@ class ImportedInterface(ExternalInterface):
             netns.iproute.set_if(self._original_state)
         self._original_state = None
 
-# Link is just another interface type
+# Switch is just another interface type
 
-class Link(ExternalInterface):
+class Switch(ExternalInterface):
     @staticmethod
     def _gen_br_name():
-        n = Link._gen_next_id()
+        n = Switch._gen_next_id()
         # Max 15 chars
         return "NETNSbr-%.4x%.3x" % (os.getpid(), n)
 
     def __init__(self, **args):
-        """Creates a new Link object, which models a linux bridge device.
+        """Creates a new Switch object, which models a linux bridge device.
         Parameters are passed to the set_parameters() method after creation."""
         iface = netns.iproute.create_bridge(self._gen_br_name())
-        super(Link, self).__init__(iface.index)
+        super(Switch, self).__init__(iface.index)
 
         self._parameters = {}
         self._ports = weakref.WeakValueDictionary()
@@ -316,7 +310,7 @@ class Link(ExternalInterface):
 
     def __setattr__(self, name, value):
         if name[0] == '_': # forbid anything that doesn't start with a _
-            super(Link, self).__setattr__(name, value)
+            super(Switch, self).__setattr__(name, value)
             return
         # Set ports
         if name in ('up', 'mtu'):

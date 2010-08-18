@@ -3,7 +3,7 @@
 
 import os, socket, sys, traceback, unshare, weakref
 from netns.environ import *
-import netns.protocol, netns.subprocess_
+import netns.protocol, netns.subprocess_, netns.interface
 
 __all__ = ['Node', 'get_nodes', 'import_if']
 
@@ -113,7 +113,7 @@ class Node(object):
         ifaces = self._slave.get_if_data()
         for i in ifaces:
             if i not in self._interfaces:
-                iface = netns.interface.ForeignNodeInterface( self, i)
+                iface = netns.interface.ImportedNodeInterface(self, i, migrate = True)
                 self._auto_interfaces.append(iface) # keep it referenced!
                 self._interfaces[i] = iface
         # by the way, clean up _interfaces
@@ -189,4 +189,4 @@ def _start_child(debug, nonetns):
     # NOTREACHED
 
 get_nodes = Node.get_nodes
-import_if = netns.interface.ImportedInterface(interface)
+import_if = netns.interface.ImportedInterface
