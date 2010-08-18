@@ -37,9 +37,9 @@ class TestNode(unittest.TestCase):
             b = netns.Node()
             ifa = a.add_if()
             ifb = b.add_if()
-            link = netns.Link()
-            link.connect(ifa)
-            link.connect(ifb)
+            switch = netns.Switch()
+            switch.connect(ifa)
+            switch.connect(ifb)
 
         # Test automatic destruction
         orig_devs = len(test_util.get_devs())

@@ -29,9 +29,9 @@ if1 = b.add_if(mtu = 1492)
 # for using with a tun device, to connect to the outside world
 if2 = b.import_if('tun0')
 
-# each Link is a linux bridge, all the parameters are applied to the associated
+# each Switch is a linux bridge, all the parameters are applied to the associated
 # interfaces as tc qdiscs.
-link0 = netns.Link(bandwidth = 100 * 1024 * 1024,
+switch0 = netns.Switch(bandwidth = 100 * 1024 * 1024,
         delay = 0.01, delay_jitter = 0.001,
         delay_correlation = 0.25, delay_distribution = 'normal',
         loss = 0.005, loss_correlation = 0.20,
@@ -39,13 +39,13 @@ link0 = netns.Link(bandwidth = 100 * 1024 * 1024,
         corrupt = 0.005, corrupt_correlation = 0.25)
 
 # connect to the bridge
-link0.connect(if0)
-link0.connect(if1)
+switch0.connect(if0)
+switch0.connect(if1)
 
 # Should be experimented with Tom Geoff's patch to see if the bridge could be
 # avoided; but for that the API would be slightly different, as these would be
 # point-to-point interfaces and links.
-# ppp0 = netns.PPPLink(a, b, bandwidth = ....)
+# ppp0 = netns.PPPSwitch(a, b, bandwidth = ....)
 # if0 = ppp0.interface(a)
 
 # For now, we have simple P2P interfaces:
@@ -54,9 +54,9 @@ link0.connect(if1)
 # Add and connect a tap device (as if a external router were plugged into a
 # switch)
 if2 = netns.ImportedInterface('tap0')
-link0.connect(if2)
+switch0.connect(if2)
 
-link0.up = True
+switch0.up = True
 if0.up = True
 if1.up = True
 
@@ -79,7 +79,7 @@ stats = if0.get_stats()
 routes = a.get_routes()
 ifaces = a.get_interfaces()
 nodes = netns.get_nodes()
-links = netns.get_links()
+switches = netns.get_switches()
 stats = link0.get_stats()
 
 # Run a process in background
@@ -108,9 +108,9 @@ def setup_linear_topology(n, bd, delay):
         if2 = nodes[i + 1].add_if()
         if1.add_v4_address(addr = ('10.0.%d.2' % i), prefix_len = 24)
         if2.add_v4_address(addr = ('10.0.%d.1' % i), prefix_len = 24)
-        link = netns.Link(bandwidth = bd, delay = delay)
-        link.connect(if1)
-        link.connect(if2)
+        switch = netns.Switch(bandwidth = bd, delay = delay)
+        switch.connect(if1)
+        switch.connect(if2)
 
     for i in range(n):
         for j in range(n):

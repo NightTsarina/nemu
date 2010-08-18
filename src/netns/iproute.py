@@ -1,6 +1,7 @@
 # vim:ts=4:sw=4:et:ai:sts=4
 
-import copy, os, re, socket, subprocess, sys
+import copy, os, re, socket, subprocess, sys, struct
+from fcntl import ioctl
 from netns.environ import *
 
 # helpers
@@ -895,3 +896,19 @@ def set_tc(iface, bandwidth = None, delay = None, delay_jitter = None,
 
     for c in commands:
         execute(c)
+
+def create_tap(iface):
+    """Creates a tap device and returns the associated file descriptor"""
+    IFF_TAP     = 0x0002
+    IFF_NO_PI   = 0x1000
+    TUNSETIFF = 0x400454ca   
+    mode = IFF_TAP | IFF_NO_PI
+    fd = os.open("/dev/net/tun", os.O_RDWR)
+    if fd == -1:
+        raise RuntimeError("Could not open /dev/net/tun")
+    err = ioctl(fd, TUNSETIFF, struct.pack("16sH", iface.name, mode))
+    if err < 0:
+        os.close(fd)
+        raise RuntimeError("Could not configure device %s" % iface.name)
+    return fd
+

@@ -4,20 +4,20 @@
 import os, unittest
 import netns, test_util, netns.environ
 
-class TestLink(unittest.TestCase):
+class TestSwitch(unittest.TestCase):
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def setUp(self):
         n1 = netns.Node()
         n2 = netns.Node()
         i1 = n1.add_if()
         i2 = n2.add_if()
-        l = netns.Link()
+        l = netns.Switch()
         l.connect(i1)
         l.connect(i2)
         self.stuff = (n1, n2, i1, i2, l)
 
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
-    def test_link_base(self):
+    def test_switch_base(self):
         (n1, n2, i1, i2, l) = self.stuff 
         l.mtu = 3000
         ifdata = netns.iproute.get_if_data()[0]
@@ -40,7 +40,7 @@ class TestLink(unittest.TestCase):
         self.assertEquals(tcdata[i2.control.index], {"qdiscs": {}})
 
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
-    def test_link_changes(self):
+    def test_switch_changes(self):
         (n1, n2, i1, i2, l) = self.stuff 
 
         # Test strange rules handling

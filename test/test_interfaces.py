@@ -29,7 +29,7 @@ class TestInterfaces(unittest.TestCase):
 
         devs = get_devs_netns(node0)
         for i in range(5):
-            self.assertFalse(devs['lo']['up'])
+            self.assertTrue(devs['lo']['up'])
             self.assertTrue(ifaces[i].name in devs)
 
         node_devs = set(node0.get_interfaces())

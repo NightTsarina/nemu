@@ -14,10 +14,10 @@ def usage(f):
     f.write("  -s, --pktsize=BYTES      Size of packet payload\n\n")
 
     f.write("Topology configuration:\n")
-    f.write("  --use-p2p                Use P2P links, to avoid bridging\n")
-    f.write("  --delay=SECS             Add delay emulation in links\n")
-    f.write("  --jitter=PERCENT         Add jitter emulation in links\n")
-    f.write("  --bandwidth=BPS          Maximum bandwidth of links\n\n")
+    f.write("  --use-p2p                Use P2P switchs, to avoid bridging\n")
+    f.write("  --delay=SECS             Add delay emulation in switchs\n")
+    f.write("  --jitter=PERCENT         Add jitter emulation in switchs\n")
+    f.write("  --bandwidth=BPS          Maximum bandwidth of switchs\n\n")
 
     f.write("How long should the benchmark run (defaults to -t 10):\n")
     f.write("  -t, --time=SECS          Stop after SECS seconds\n")
@@ -89,7 +89,7 @@ def main():
         elif not pktsize:
             error = "Missing mandatory --pktsize argument"
         elif use_p2p and (delay or jitter or bandwidth):
-            error = "Cannot use link emulation with P2P links"
+            error = "Cannot use switch emulation with P2P switchs"
 
     if error:
         sys.stderr.write("%s: %s\n" % (os.path.basename(sys.argv[0]), error))
@@ -106,7 +106,7 @@ def main():
     if not udp_perf:
         raise RuntimeError("Cannot find `udp-perf'")
 
-    nodes, interfaces, links = create_topo(nr, use_p2p, delay, jitter,
+    nodes, interfaces, switchs = create_topo(nr, use_p2p, delay, jitter,
             bandwidth)
 
     cmdline = [udp_perf, "--server"]
@@ -174,7 +174,7 @@ def dec2ip(dec):
 def create_topo(n, p2p, delay, jitter, bw):
     nodes = []
     interfaces = []
-    links = []
+    switchs = []
     for i in range(n):
         nodes.append(netns.Node())
     if p2p:
@@ -197,12 +197,12 @@ def create_topo(n, p2p, delay, jitter, bw):
                 right = None
             interfaces.append((left, right))
         for i in range(n - 1):
-            link = netns.Link(bandwidth = bw, delay = delay,
+            switch = netns.Switch(bandwidth = bw, delay = delay,
                     delay_jitter = jitter)
-            link.up = True
-            link.connect(interfaces[i][1])
-            link.connect(interfaces[i + 1][0])
-            links.append(link)
+            switch.up = True
+            switch.connect(interfaces[i][1])
+            switch.connect(interfaces[i + 1][0])
+            switchs.append(switch)
 
     for i in range(n):
         for j in (0, 1):
@@ -222,7 +222,7 @@ def create_topo(n, p2p, delay, jitter, bw):
                 nexthop = dec2ip(ipbase + 4 * i + 2))
         nodes[n - 1 - i].add_route(prefix = "10.0.0.0", prefix_len = 30,
                 nexthop = dec2ip(ipbase + (n - 2 - i) * 4 + 1))
-    return nodes, interfaces, links
+    return nodes, interfaces, switchs
 
 if __name__ == "__main__":
     main()

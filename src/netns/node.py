@@ -96,6 +96,12 @@ class Node(object):
             setattr(i, k, v)
         return i
 
+    def add_tap(self, **kwargs):
+        i = netns.interface.TapNodeInterface(self)
+        for k, v in kwargs.items():
+            setattr(i, k, v)
+        return i
+
     def import_if(self, interface):
         return netns.interface.ImportedNodeInterface(self, interface)
 

@@ -169,7 +169,7 @@ class P2PInterface(NSInterface):
             self._slave = None
 
 class ImportedNodeInterface(NSInterface):
-    """Class to handle already existing interfaces inside a name spac: 
+    """Class to handle already existing interfaces inside a name space: 
     real devices, tun devices, etc.
     The flag 'migrate' in the constructor indicates that the interface was migrated 
     inside the name space. 
@@ -202,6 +202,30 @@ class ImportedNodeInterface(NSInterface):
                 # else, assume it is in the main name space
                 netns.iproute.set_if(self._original_state)
             self._slave = None
+
+class TapNodeInterface(NSInterface):
+    """Class to create a tap interface inside a name space, it
+    can be connected to a Switch object with emulation of link
+    characteristics."""
+    def __init__(self, node):
+        """Create a new tap interface. 'node' is the name space in which this
+        interface should be put."""
+        iface = netns.iproute.interface(name = self._gen_if_name())
+        self._fd = netns.iproute.create_tap(iface) 
+        netns.iproute.change_netns(iface.name, node.pid)
+        iface = node.get_interface(iface.name)
+        super(TapNodeInterface, self).__init__(node, iface.index)
+
+    @property
+    def fd(self):
+        return self._fd
+
+    def destroy(self):
+        if self._fd:
+            try:
+                os.close(self._fd)
+            except:
+                pass
 
 class ExternalInterface(Interface):
     """Add user-facing methods for interfaces that run in the main namespace."""
@@ -257,7 +281,7 @@ class ExternalInterface(Interface):
         return ret
 
 class SlaveInterface(ExternalInterface):
-    """Class to handle the main-name-space-facing couples of Nodeinterface.
+    """Class to handle the main-name-space-facing half of NodeInterface.
     Does nothing, just avoids any destroy code."""
     def destroy(self):
         pass
