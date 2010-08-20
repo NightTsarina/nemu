@@ -107,6 +107,7 @@ class NodeInterface(NSInterface):
     def __init__(self, node):
         """Create a new interface. `node' is the name space in which this
         interface should be put."""
+        self._slave = None
         if1 = netns.iproute.interface(name = self._gen_if_name())
         if2 = netns.iproute.interface(name = self._gen_if_name())
         ctl, ns = netns.iproute.create_if_pair(if1, if2)
@@ -176,6 +177,7 @@ class ImportedNodeInterface(NSInterface):
     On destruction, the interface will be restored to the original name space and 
     will try to restore the original state."""
     def __init__(self, node, iface, migrate = False):
+        self._slave = None
         self._migrate = migrate
         if self._migrate:
             iface = node._slave.get_if_data(iface)
@@ -192,7 +194,7 @@ class ImportedNodeInterface(NSInterface):
         super(ImportedNodeInterface, self).__init__(node, iface.index)
 
     def destroy(self): # override: restore as much as possible
-        if self._slave:            
+        if self._slave:
             if self.index in self._slave.get_if_data():
                 if self._migrate:
                     self._slave.set_if(self._original_state)
@@ -210,10 +212,11 @@ class TapNodeInterface(NSInterface):
     def __init__(self, node):
         """Create a new tap interface. 'node' is the name space in which this
         interface should be put."""
+        self._fd = None
+        self._slave = None
         iface = netns.iproute.interface(name = self._gen_if_name())
-        self._fd = netns.iproute.create_tap(iface) 
+        iface, self._fd = netns.iproute.create_tap(iface) 
         netns.iproute.change_netns(iface.name, node.pid)
-        iface = node.get_interface(iface.name)
         super(TapNodeInterface, self).__init__(node, iface.index)
 
     @property
@@ -294,6 +297,7 @@ class ImportedInterface(ExternalInterface):
     destruction, the code will try to restore the interface to the state it was
     in before being imported into netns."""
     def __init__(self, iface):
+        self._original_state = None
         iface = netns.iproute.get_if(iface)
         self._original_state = iface.copy()
         super(ImportedInterface, self).__init__(iface.index)

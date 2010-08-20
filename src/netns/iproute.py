@@ -899,6 +899,10 @@ def set_tc(iface, bandwidth = None, delay = None, delay_jitter = None,
 
 def create_tap(iface):
     """Creates a tap device and returns the associated file descriptor"""
+    if isinstance(iface, str):
+        iface = interface(name = iface)
+    assert iface.name
+
     IFF_TAP     = 0x0002
     IFF_NO_PI   = 0x1000
     TUNSETIFF = 0x400454ca   
@@ -910,5 +914,16 @@ def create_tap(iface):
     if err < 0:
         os.close(fd)
         raise RuntimeError("Could not configure device %s" % iface.name)
-    return fd
+
+    try:
+        set_if(iface)
+    except:
+        (t, v, bt) = sys.exc_info()
+        try:
+            os.close(fd)
+        except:
+            pass
+        raise t, v, bt
+    interfaces = get_if_data()[1]
+    return interfaces[iface.name], fd
 

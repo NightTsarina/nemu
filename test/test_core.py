@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # vim:ts=4:sw=4:et:ai:sts=4
 
-import grp, os, pwd, time, threading, unittest
+import grp, os, pwd, select, time, threading, unittest
 import netns, test_util
 
 class TestConfigure(unittest.TestCase):
@@ -99,60 +99,33 @@ class TestGlobal(unittest.TestCase):
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_run_ping_tap(self):
         """This test simulates a point to point connection between two hosts using two tap devices"""
-        class ChannelThread:
-            def __init__(self):
-                self.stop = False
-                self.thread = None
-
-            def _run(self, fd1, fd2):
-                while not self.stop:
-                    s = os.read(fd1, 65536)
-                    os.write(fd2, s)
-
-            def start(self, fd1, fd2):
-                self.thread = threading.Thread(target = self._run, args=[fd1, fd2])
-                self.thread.start()
-        
         n1 = netns.Node()
         n2 = netns.Node()
 
-        i1 = n1.add_if()
         tap1 = n1.add_tap()
         tap2  = n2.add_tap()
-        i2 = n2.add_if()
-        i1.up = tap1.up = tap2.up = i2.up = True
+        tap1.up = tap2.up = True
 
-        i1.add_v4_address('10.0.0.1', 24)
         tap1.add_v4_address('10.0.1.1', 24)
         tap2.add_v4_address('10.0.1.2', 24)
-        i2.add_v4_address('10.0.2.2', 24)
-
-        n2.add_route(prefix = '10.0.0.0', prefix_len = 24, nexthop = '10.0.1.2')
-        n1.add_route(prefix = '10.0.2.0', prefix_len = 24, nexthop = '10.0.1.1')
-
-        # communication forth between the two taps
-        thread1 = ChannelThread()
-        thread1.start(tap1.fd, tap2.fd)
         
-        # communication back between the two taps
-        thread2 = ChannelThread()
-        thread2.start(tap2.fd, tap1.fd)
-
         null = file('/dev/null', 'wb')
-        a = n1.Popen(['ping', '-qc1', '10.0.2.1'], stdout = null)
-        self.assertEquals(a.wait(), 0)
+        a = n1.Popen(['ping', '-qc1', '10.0.1.2'], stdout = null)
         
-        print 'jhola'
+        while(True):
+            ready = select.select([tap1.fd, tap2.fd], [], [], 0.1)[0]
+            if ready:
+                s = os.read(ready[0], 65536)
+                if ready[0] == tap1.fd:
+                    os.write(tap2.fd, s)
+                else:
+                    os.write(tap1.fd, s)
+                if not s:
+                    break
+            if a.poll() != None:
+                break
 
-        thread1.stop = True
-        thread2.stop = True
-
-        os.write(tap1.fd, "0")
-        os.write(tap2.fd, "0")
-
-        thread1.thread.join()
-        thread2.thread.join()
-        print 'lalala'
+        self.assertEquals(a.wait(), 0)
 
 if __name__ == '__main__':
     unittest.main()
