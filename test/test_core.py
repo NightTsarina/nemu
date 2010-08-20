@@ -95,7 +95,6 @@ class TestGlobal(unittest.TestCase):
         self.assertEquals(a1.wait(), 0)
         self.assertEquals(a2.wait(), 0)
 
-
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_run_ping_tap(self):
         """This test simulates a point to point connection between two hosts using two tap devices"""
@@ -127,5 +126,64 @@ class TestGlobal(unittest.TestCase):
 
         self.assertEquals(a.wait(), 0)
 
+    @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
+    def test_run_ping_tap_routing(self):
+        """This test simulates a point to point connection between two hosts using two tap devices"""
+        n1 = netns.Node()
+        n2 = netns.Node()
+        n3 = netns.Node()
+        n4 = netns.Node()
+ 
+        i1 = n1.add_if()
+        i2 = n2.add_if()
+        tap1 = n2.add_tap()
+        tap2 = n3.add_tap()
+        i3 = n3.add_if()
+        i4 = n4.add_if()
+
+        i1.up = i2.up = tap1.up = tap2.up = i3.up = i4.up = True
+
+        l1 = netns.Switch()
+        l2 = netns.Switch()
+
+        l1.connect(i1)
+        l1.connect(i2)
+        l2.connect(i3)
+        l2.connect(i4)
+
+        l1.up = l2.up = True
+
+        i1.add_v4_address('10.0.0.1', 24)
+        i2.add_v4_address('10.0.0.2', 24)
+        tap1.add_v4_address('10.0.1.1', 24)
+        tap2.add_v4_address('10.0.1.2', 24)
+        i3.add_v4_address('10.0.2.1', 24)
+        i4.add_v4_address('10.0.2.2', 24)
+
+        n1.add_route(prefix = '10.0.1.0', prefix_len = 24, nexthop = '10.0.0.2')
+        n1.add_route(prefix = '10.0.2.0', prefix_len = 24, nexthop = '10.0.0.2')
+        n2.add_route(prefix = '10.0.2.0', prefix_len = 24, nexthop = '10.0.1.2')
+        n3.add_route(prefix = '10.0.0.0', prefix_len = 24, nexthop = '10.0.1.1')
+        n4.add_route(prefix = '10.0.1.0', prefix_len = 24, nexthop = '10.0.2.1')
+        n4.add_route(prefix = '10.0.0.0', prefix_len = 24, nexthop = '10.0.2.1')
+
+        null = file('/dev/null', 'wb')
+        a = n1.Popen(['ping', '-qc1', '10.0.2.2'], stdout = null)
+        
+        while(True):
+            ready = select.select([tap1.fd, tap2.fd], [], [], 0.1)[0]
+            if ready:
+                s = os.read(ready[0], 65536)
+                if ready[0] == tap1.fd:
+                    os.write(tap2.fd, s)
+                else:
+                    os.write(tap1.fd, s)
+                if not s:
+                    break
+            if a.poll() != None:
+                break
+
+        self.assertEquals(a.wait(), 0)
+
 if __name__ == '__main__':
-    unittest.main()
+     unittest.main()
