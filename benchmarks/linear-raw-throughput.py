@@ -154,9 +154,24 @@ def main():
         return
 
     data = out.split(" ")
-    data = map(lambda s: s.partition(":")[2], data)
+    data = dict(map(lambda s: s.partition(":")[::2], data))
+    if sorted(data.keys()) != sorted(["brx", "prx", "pksz", "plsz", "err",
+            "mind", "avgd", "maxd", "jit", "time"]):
+        raise RuntimeError("Invalid output from udp-perf")
+    data["nodes"] = nr
+    data["bridge"] = int(not use_p2p)
+    data["cfg_dly"] = delay if delay else ""
+    data["cfg_bw"] = bandwidth if bandwidth else ""
+    data["cfg_jit"] = jitter if jitter else ""
+
+    res = []
+    for i in ["nodes", "bridge", "cfg_dly", "cfg_bw", "cfg_jit",
+            "brx", "prx", "pksz", "plsz", "err", "mind", "avgd",
+            "maxd", "jit", "time"]:
+        res.append(data[i])
+
     writer = csv.writer(sys.stdout)
-    writer.writerow([" ".join(sys.argv[1:])] + data)
+    writer.writerow(res)
 
 def ip2dec(ip):
     match = re.search(r'^(\d+)\.(\d+)\.(\d+)\.(\d+)$', ip)

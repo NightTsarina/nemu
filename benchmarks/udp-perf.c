@@ -279,8 +279,6 @@ static void run_server(int port, uint64_t max_time, uint64_t max_pkts,
         printf("mind:%ld avgd:%ld maxd:%ld jit:%lf time:%ld ",
                 min_delay, tot_delay / preceived, max_delay, jitter,
                 now - start);
-        printf("bw:%ld\n",
-                (long)(1.0L * (breceived * 8000000) / (now - start)));
     }
 
     status = close(fd);
