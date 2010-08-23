@@ -875,9 +875,11 @@ def set_tc(iface, bandwidth = None, delay = None, delay_jitter = None,
             if delay_jitter:
                 command += ["%fs" % delay_jitter]
             if delay_correlation:
+                if not delay_jitter:
+                    raise ValueError("delay_correlation requires delay_jitter")
                 command += ["%f%%" % (delay_correlation * 100)]
             if delay_distribution:
-                if not delay_jitter: # or not delay_correlation:
+                if not delay_jitter:
                     raise ValueError("delay_distribution requires delay_jitter")
                 command += ["distribution", delay_distribution]
         if loss:
