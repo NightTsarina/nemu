@@ -49,7 +49,7 @@ switch0.connect(if1)
 # if0 = ppp0.interface(a)
 
 # For now, we have simple P2P interfaces:
-(pppa, pppb) = netns.P2PInterface(a, b)
+(pppa, pppb) = netns.P2PInterface.create_pair(a, b)
 
 # Add and connect a tap device (as if a external router were plugged into a
 # switch)
