@@ -7,25 +7,31 @@ __doc__ = """Creates a linear network topology, and measures the maximum
 end-to-end throughput for the specified packet size."""
 
 def usage(f):
-    f.write("Usage: %s --nodes=NUM --pktsize=BYTES [OPTIONS]\n%s\n\n" %
+    f.write("Usage: %s --nodes=NUM [TOPOLOGY_OPTIONS] [TEST_OPTIONS]\n%s\n\n" %
             (os.path.basename(sys.argv[0]), __doc__))
-    f.write("Mandatory arguments:\n")
-    f.write("  -n, --nodes=NUM          Number of nodes to create\n")
-    f.write("  -s, --pktsize=BYTES      Size of packet payload\n\n")
 
     f.write("Topology configuration:\n")
-    f.write("  --use-p2p                Use P2P switchs, to avoid bridging\n")
-    f.write("  --delay=SECS             Add delay emulation in switchs\n")
-    f.write("  --jitter=PERCENT         Add jitter emulation in switchs\n")
-    f.write("  --bandwidth=BPS          Maximum bandwidth of switchs\n\n")
+    f.write("  -n, --nodes=NUM      Number of nodes to create (mandatory)\n")
+    f.write("  --use-p2p            Use P2P links, to avoid bridging\n")
+    f.write("  --delay=SECS         Add delay emulation in links\n")
+    f.write("  --jitter=PERCENT     Add jitter emulation in links\n")
+    f.write("  --bandwidth=BPS      Maximum bandwidth of links\n\n")
 
-    f.write("How long should the benchmark run (defaults to -t 10):\n")
-    f.write("  -t, --time=SECS          Stop after SECS seconds\n")
-    f.write("  -p, --packets=NUM        Stop after NUM packets\n")
-    f.write("  -b, --bytes=BYTES        Stop after BYTES bytes sent\n\n")
+    f.write("Test specification:\n")
+    f.write(" Parameters take single values or ranges of falues in the form " +
+            "nnn-NNN, a test\n")
+    f.write(" will be run for each possible combination.\n")
+    f.write("  -s, --pktsize=BYTES  Size of packet payload (mandatory)\n")
+    f.write("  --bwlimit=BPS        Apply bandwidth limitation in the " +
+            "traffic generator\n\n")
+    # background noise
+    f.write("How long should each test run (defaults to -t 10):\n")
+    f.write("  -t, --time=SECS      Stop after SECS seconds\n")
+    f.write("  -p, --packets=NUM    Stop after NUM packets\n")
+    f.write("  -b, --bytes=BYTES    Stop after BYTES bytes sent\n\n")
 
     f.write("Output format:\n")
-    f.write("  --format=FMT             Valid values are `csv', `brief', " +
+    f.write("  --format=FMT         Valid values are `csv', `brief', " +
             "and `verbose'\n")
 
 def main():
@@ -89,7 +95,7 @@ def main():
         elif not pktsize:
             error = "Missing mandatory --pktsize argument"
         elif use_p2p and (delay or jitter or bandwidth):
-            error = "Cannot use switch emulation with P2P switchs"
+            error = "Cannot use links emulation with P2P links"
 
     if error:
         sys.stderr.write("%s: %s\n" % (os.path.basename(sys.argv[0]), error))
@@ -106,7 +112,7 @@ def main():
     if not udp_perf:
         raise RuntimeError("Cannot find `udp-perf'")
 
-    nodes, interfaces, switchs = create_topo(nr, use_p2p, delay, jitter,
+    nodes, interfaces, links = create_topo(nr, use_p2p, delay, jitter,
             bandwidth)
 
     cmdline = [udp_perf, "--server"]
@@ -189,7 +195,7 @@ def dec2ip(dec):
 def create_topo(n, p2p, delay, jitter, bw):
     nodes = []
     interfaces = []
-    switchs = []
+    links = []
     for i in range(n):
         nodes.append(netns.Node())
     if p2p:
@@ -212,12 +218,12 @@ def create_topo(n, p2p, delay, jitter, bw):
                 right = None
             interfaces.append((left, right))
         for i in range(n - 1):
-            switch = netns.Switch(bandwidth = bw, delay = delay,
+            links = netns.Switch(bandwidth = bw, delay = delay,
                     delay_jitter = jitter)
-            switch.up = True
-            switch.connect(interfaces[i][1])
-            switch.connect(interfaces[i + 1][0])
-            switchs.append(switch)
+            links.up = True
+            links.connect(interfaces[i][1])
+            links.connect(interfaces[i + 1][0])
+            links.append(links)
 
     for i in range(n):
         for j in (0, 1):
@@ -237,7 +243,7 @@ def create_topo(n, p2p, delay, jitter, bw):
                 nexthop = dec2ip(ipbase + 4 * i + 2))
         nodes[n - 1 - i].add_route(prefix = "10.0.0.0", prefix_len = 30,
                 nexthop = dec2ip(ipbase + (n - 2 - i) * 4 + 1))
-    return nodes, interfaces, switchs
+    return nodes, interfaces, links
 
 if __name__ == "__main__":
     main()
