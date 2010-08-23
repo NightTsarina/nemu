@@ -56,7 +56,17 @@ class NSInterface(Interface):
 
     # some black magic to automatically get/set interface attributes
     def __getattr__(self, name):
-        iface = self._slave.get_if_data(self.index)
+        # If name starts with _, it must be a normal attr
+        if name[0] == '_':
+            return super(Interface, self).__getattribute__(name)
+
+        try:
+            slave = super(Interface, self).__getattribute__("_slave")
+        except:
+            # Not initialised yet
+            return super(Interface, self).__getattribute__(name)
+
+        iface = slave.get_if_data(self.index)
         return getattr(iface, name)
 
     def __setattr__(self, name, value):
@@ -348,9 +358,6 @@ class Switch(ExternalInterface):
         iface = netns.iproute.bridge(index = self.index)
         setattr(iface, name, value)
         netns.iproute.set_bridge(iface)
-
-    def __del__(self):
-        self.destroy()
 
     def destroy(self):
         if not self.index:
