@@ -35,27 +35,11 @@ if1a.add_v4_address(address = '10.0.0.2', prefix_len = 24)
 if1b.add_v4_address(address = '10.0.1.1', prefix_len = 24)
 if2.add_v4_address(address = '10.0.1.2', prefix_len = 24)
 
-# RFC-4193 Unique local addresses.
-# Pre-generated random block: fde2:4a1d:8870::/48
-if0.add_v6_address(address = 'fde2:4a1d:8870:0::1',
-        prefix_len = 32)
-if1a.add_v6_address(address = 'fde2:4a1d:8870:0::2',
-        prefix_len = 32)
-if1b.add_v6_address(address = 'fde2:4a1d:8870:1::1',
-        prefix_len = 32)
-if2.add_v6_address(address = 'fde2:4a1d:8870:1::2',
-        prefix_len = 32)
-
 # Configure routing
 node0.add_route(prefix = '10.0.1.0', prefix_len = 24,
         nexthop = '10.0.0.2')
 node2.add_route(prefix = '10.0.0.0', prefix_len = 24,
         nexthop = '10.0.1.1')
-
-node0.add_route(prefix = 'fde2:4a1d:8870:1::', prefix_len = 32,
-        nexthop = 'fde2:4a1d:8870:0::1')
-node2.add_route(prefix = 'fde2:4a1d:8870:0::', prefix_len = 32,
-        nexthop = 'fde2:4a1d:8870:1::0')
 
 # Test connectivity first. Run process, hide output and check
 # return code
@@ -71,12 +55,12 @@ ret = app1.wait()
 assert ret == 0
 print "Connectivity IPv4 OK!"
 
-# if arguments speficied as array, no need to invoke the shell
-app2 = node0.Popen(["ping6", "-c1", "fde2:4a1d:8870:1::2"])#, stdout = null)
-ret = app2.wait()
-#assert ret == 0
+# Now test the network conditions
+# When using a args list, the shell is not needed
+app2 = node2.Popen(["ping", "-c1000000", "-f", "10.0.1.2"],
+        stdout = subprocess.PIPE)
 
-app3 = node0.Popen(["ping6", "-c1", "fde2:4a1d:8870:0::1"], stdout = null)
-ret = app3.wait()
-#assert ret == 0
-print "Connectivity IPv6 OK!"
+out, err = appt2.communicate()
+
+print "Ping outout:"
+print out
