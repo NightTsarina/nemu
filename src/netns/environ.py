@@ -52,7 +52,8 @@ except:
             "continue.")
 
 def execute(cmd):
-    #print " ".join(cmd)#; return
+    # FIXME: create a global debug variable
+    #print "[pid %d]" % os.getpid(), " ".join(cmd)
     null = open("/dev/null", "r+")
     p = subprocess.Popen(cmd, stdout = null, stderr = subprocess.PIPE)
     out, err = p.communicate()
