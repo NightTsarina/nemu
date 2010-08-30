@@ -142,14 +142,14 @@ class NodeInterface(NSInterface):
 
 class P2PInterface(NSInterface):
     """Class to create and handle point-to-point interfaces between name
-    spaces, without using Switch objects. Those do not allow any kind of traffic
-    shaping.
+    spaces, without using Switch objects. Those do not allow any kind of
+    traffic shaping.
     As two interfaces need to be created, instead of using the class
     constructor, use the P2PInterface.create_pair() static method."""
     @staticmethod
     def create_pair(node1, node2):
-        """Create and return a pair of connected P2PInterface objects, assigned
-        to name spaces represented by `node1' and `node2'."""
+        """Create and return a pair of connected P2PInterface objects,
+        assigned to name spaces represented by `node1' and `node2'."""
         if1 = netns.iproute.interface(name = P2PInterface._gen_if_name())
         if2 = netns.iproute.interface(name = P2PInterface._gen_if_name())
         pair = netns.iproute.create_if_pair(if1, if2)
@@ -180,12 +180,12 @@ class P2PInterface(NSInterface):
             self._slave = None
 
 class ImportedNodeInterface(NSInterface):
-    """Class to handle already existing interfaces inside a name space: 
+    """Class to handle already existing interfaces inside a name space:
     real devices, tun devices, etc.
-    The flag 'migrate' in the constructor indicates that the interface was migrated 
-    inside the name space. 
-    On destruction, the interface will be restored to the original name space and 
-    will try to restore the original state."""
+    The flag 'migrate' in the constructor indicates that the interface was
+    migrated inside the name space.
+    On destruction, the interface will be restored to the original name space
+    and will try to restore the original state."""
     def __init__(self, node, iface, migrate = False):
         self._slave = None
         self._migrate = migrate
@@ -225,7 +225,7 @@ class TapNodeInterface(NSInterface):
         self._fd = None
         self._slave = None
         iface = netns.iproute.interface(name = self._gen_if_name())
-        iface, self._fd = netns.iproute.create_tap(iface) 
+        iface, self._fd = netns.iproute.create_tap(iface)
         netns.iproute.change_netns(iface.name, node.pid)
         super(TapNodeInterface, self).__init__(node, iface.index)
 
@@ -241,7 +241,8 @@ class TapNodeInterface(NSInterface):
                 pass
 
 class ExternalInterface(Interface):
-    """Add user-facing methods for interfaces that run in the main namespace."""
+    """Add user-facing methods for interfaces that run in the main
+    namespace."""
     @property
     def control(self):
         # This is *the* control interface
@@ -301,11 +302,11 @@ class SlaveInterface(ExternalInterface):
 
 class ImportedInterface(ExternalInterface):
     """Class to handle already existing interfaces. Analogous to
-    ImportedNodeInterface, this class only differs in that the interface is not
-    migrated inside the name space. This kind of interfaces can only be
+    ImportedNodeInterface, this class only differs in that the interface is
+    not migrated inside the name space. This kind of interfaces can only be
     connected to Switch objects and not assigned to a name space.  On
-    destruction, the code will try to restore the interface to the state it was
-    in before being imported into netns."""
+    destruction, the code will try to restore the interface to the state it
+    was in before being imported into netns."""
     def __init__(self, iface):
         self._original_state = None
         iface = netns.iproute.get_if(iface)
@@ -329,7 +330,8 @@ class Switch(ExternalInterface):
 
     def __init__(self, **args):
         """Creates a new Switch object, which models a linux bridge device.
-        Parameters are passed to the set_parameters() method after creation."""
+        Parameters are passed to the set_parameters() method after
+        creation."""
         iface = netns.iproute.create_bridge(self._gen_br_name())
         super(Switch, self).__init__(iface.index)
 

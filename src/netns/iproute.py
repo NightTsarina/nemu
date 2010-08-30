@@ -1,7 +1,6 @@
 # vim:ts=4:sw=4:et:ai:sts=4
 
-import copy, os, re, socket, subprocess, sys, struct
-from fcntl import ioctl
+import copy, fcntl, os, re, socket, struct, subprocess, sys
 from netns.environ import *
 
 # helpers
@@ -182,8 +181,9 @@ class bridge(interface):
 
 class address(object):
     """Class for internal use. It is mostly a data container used to easily
-    pass information around; with some convenience methods. __eq__ and __hash__
-    are defined just to be able to easily find duplicated addresses."""
+    pass information around; with some convenience methods. __eq__ and
+    __hash__ are defined just to be able to easily find duplicated
+    addresses."""
     # broadcast is not taken into account for differentiating addresses
     def __eq__(self, o):
         if not isinstance(o, address):
@@ -502,8 +502,8 @@ def _sysfs_read_br(brname):
             ports           = os.listdir(p2))
 
 def get_bridge_data():
-    # brctl stinks too much; it is better to directly use sysfs, it is probably
-    # stable by now
+    # brctl stinks too much; it is better to directly use sysfs, it is
+    # probably stable by now
     byidx = {}
     bynam = {}
     ports = {}
@@ -912,7 +912,7 @@ def create_tap(iface):
     fd = os.open("/dev/net/tun", os.O_RDWR)
     if fd == -1:
         raise RuntimeError("Could not open /dev/net/tun")
-    err = ioctl(fd, TUNSETIFF, struct.pack("16sH", iface.name, mode))
+    err = fcntl.ioctl(fd, TUNSETIFF, struct.pack("16sH", iface.name, mode))
     if err < 0:
         os.close(fd)
         raise RuntimeError("Could not configure device %s" % iface.name)

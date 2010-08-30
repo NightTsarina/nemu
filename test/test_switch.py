@@ -18,17 +18,21 @@ class TestSwitch(unittest.TestCase):
 
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_switch_base(self):
-        (n1, n2, i1, i2, l) = self.stuff 
+        (n1, n2, i1, i2, l) = self.stuff
         l.mtu = 3000
         ifdata = netns.iproute.get_if_data()[0]
         self.assertEquals(ifdata[l.index].mtu, 3000)
-        self.assertEquals(ifdata[i1.control.index].mtu, 3000, "MTU propagation")
-        self.assertEquals(ifdata[i2.control.index].mtu, 3000, "MTU propagation")
+        self.assertEquals(ifdata[i1.control.index].mtu, 3000,
+                "MTU propagation")
+        self.assertEquals(ifdata[i2.control.index].mtu, 3000,
+                "MTU propagation")
         i1.mtu = i2.mtu = 3000
 
         self.assertEquals(ifdata[l.index].up, False)
-        self.assertEquals(ifdata[i1.control.index].up, False, "UP propagation")
-        self.assertEquals(ifdata[i2.control.index].up, False, "UP propagation")
+        self.assertEquals(ifdata[i1.control.index].up, False,
+                "UP propagation")
+        self.assertEquals(ifdata[i2.control.index].up, False,
+                "UP propagation")
 
         l.up = True
         ifdata = netns.iproute.get_if_data()[0]
@@ -41,7 +45,7 @@ class TestSwitch(unittest.TestCase):
 
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_switch_changes(self):
-        (n1, n2, i1, i2, l) = self.stuff 
+        (n1, n2, i1, i2, l) = self.stuff
 
         # Test strange rules handling
         os.system(("%s qd add dev %s root prio bands 3 " +
@@ -70,14 +74,14 @@ class TestSwitch(unittest.TestCase):
         self._test_none()  # both  => none
 
     def _test_none(self):
-        (n1, n2, i1, i2, l) = self.stuff 
+        (n1, n2, i1, i2, l) = self.stuff
         l.set_parameters()
         tcdata = netns.iproute.get_tc_data()[0]
         self.assertEquals(tcdata[i1.control.index], {"qdiscs": {}})
         self.assertEquals(tcdata[i2.control.index], {"qdiscs": {}})
 
     def _test_tbf(self):
-        (n1, n2, i1, i2, l) = self.stuff 
+        (n1, n2, i1, i2, l) = self.stuff
         l.set_parameters(bandwidth = 13107200) # 100 mbits
         tcdata = netns.iproute.get_tc_data()[0]
         self.assertEquals(tcdata[i1.control.index],
@@ -87,7 +91,7 @@ class TestSwitch(unittest.TestCase):
                 {"bandwidth": 13107000, "qdiscs": {"tbf": "1"}})
 
     def _test_netem(self):
-        (n1, n2, i1, i2, l) = self.stuff 
+        (n1, n2, i1, i2, l) = self.stuff
         l.set_parameters(delay = 0.001) # 1ms
         tcdata = netns.iproute.get_tc_data()[0]
         self.assertEquals(tcdata[i1.control.index],
@@ -96,7 +100,7 @@ class TestSwitch(unittest.TestCase):
                 {"delay": 0.001, "qdiscs": {"netem": "2"}})
 
     def _test_both(self):
-        (n1, n2, i1, i2, l) = self.stuff 
+        (n1, n2, i1, i2, l) = self.stuff
         l.set_parameters(bandwidth = 13107200, delay = 0.001) # 100 mbits, 1ms
         tcdata = netns.iproute.get_tc_data()[0]
         self.assertEquals(tcdata[i1.control.index],

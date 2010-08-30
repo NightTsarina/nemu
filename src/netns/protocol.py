@@ -63,8 +63,8 @@ _proc_commands = {
         }
 
 class Server(object):
-    """Class that implements the communication protocol and dispatches calls to
-    the required functions. Also works as the main loop for the slave
+    """Class that implements the communication protocol and dispatches calls
+    to the required functions. Also works as the main loop for the slave
     process."""
     def __init__(self, rfd, wfd, debug = 0):
         # Dictionary of valid commands

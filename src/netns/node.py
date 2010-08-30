@@ -3,7 +3,7 @@
 
 import os, socket, sys, traceback, unshare, weakref
 from netns.environ import *
-import netns.protocol, netns.subprocess_, netns.interface
+import netns.interface, netns.protocol, netns.subprocess_
 
 __all__ = ['Node', 'get_nodes', 'import_if']
 
@@ -19,8 +19,8 @@ class Node(object):
         """Create a new node in the emulation. Implemented as a separate
         process in a new network name space. Requires root privileges to run.
 
-        If keepns is true, the network name space is not created and can be run
-        as a normal user, for testing. If debug is true, details of the
+        If keepns is true, the network name space is not created and can be
+        run as a normal user, for testing. If debug is true, details of the
         communication protocol are printed on stderr."""
 
         # Initialize attributes, in case something fails during __init__
@@ -119,7 +119,8 @@ class Node(object):
         ifaces = self._slave.get_if_data()
         for i in ifaces:
             if i not in self._interfaces:
-                iface = netns.interface.ImportedNodeInterface(self, i, migrate = True)
+                iface = netns.interface.ImportedNodeInterface(self, i,
+                        migrate = True)
                 self._auto_interfaces.append(iface) # keep it referenced!
                 self._interfaces[i] = iface
         # by the way, clean up _interfaces

@@ -29,8 +29,8 @@ if1 = b.add_if(mtu = 1492)
 # for using with a tun device, to connect to the outside world
 if2 = b.import_if('tun0')
 
-# each Switch is a linux bridge, all the parameters are applied to the associated
-# interfaces as tc qdiscs.
+# each Switch is a linux bridge, all the parameters are applied to the
+# associated interfaces as tc qdiscs.
 switch0 = netns.Switch(bandwidth = 100 * 1024 * 1024,
         delay = 0.01, delay_jitter = 0.001,
         delay_correlation = 0.25, delay_distribution = 'normal',

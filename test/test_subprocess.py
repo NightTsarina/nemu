@@ -268,7 +268,7 @@ class TestSubprocess(unittest.TestCase):
                 stdin = PIPE, stdout = PIPE, stderr = PIPE)
         self.assertEquals(p.communicate(_longstring), (_longstring, ) * 2)
 
-    def test_backticks(self): 
+    def test_backticks(self):
         node = netns.Node(nonetns = True, debug = 0)
         self.assertEquals(backticks(node, "echo hello world"), "hello world\n")
         self.assertEquals(backticks(node, r"echo hello\ \ world"),
@@ -280,7 +280,7 @@ class TestSubprocess(unittest.TestCase):
         self.assertRaises(RuntimeError, backticks_raise, node, "false")
         self.assertRaises(RuntimeError, backticks_raise, node, "kill $$")
 
-    def test_system(self): 
+    def test_system(self):
         node = netns.Node(nonetns = True, debug = 0)
         self.assertEquals(system(node, "true"), 0)
         self.assertEquals(system(node, "false"), 1)

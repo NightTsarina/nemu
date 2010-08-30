@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # vim:ts=4:sw=4:et:ai:sts=4
 
-import grp, os, pwd, select, time, threading, unittest
+import grp, os, pwd, select, time, unittest
 import netns, test_util
 
 class TestConfigure(unittest.TestCase):
@@ -86,8 +86,10 @@ class TestGlobal(unittest.TestCase):
         i2b.add_v4_address('10.0.1.1', 24)
         i3.add_v4_address('10.0.1.2', 24)
 
-        n1.add_route(prefix = '10.0.1.0', prefix_len = 24, nexthop = '10.0.0.2')
-        n3.add_route(prefix = '10.0.0.0', prefix_len = 24, nexthop = '10.0.1.1')
+        n1.add_route(prefix = '10.0.1.0', prefix_len = 24,
+                nexthop = '10.0.0.2')
+        n3.add_route(prefix = '10.0.0.0', prefix_len = 24,
+                nexthop = '10.0.1.1')
 
         null = file('/dev/null', 'wb')
         a1 = n1.Popen(['ping', '-qc1', '10.0.1.2'], stdout = null)
@@ -97,7 +99,8 @@ class TestGlobal(unittest.TestCase):
 
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_run_ping_tap(self):
-        """This test simulates a point to point connection between two hosts using two tap devices"""
+        """This test simulates a point to point connection between two hosts
+        using two tap devices"""
         n1 = netns.Node()
         n2 = netns.Node()
 
@@ -128,7 +131,8 @@ class TestGlobal(unittest.TestCase):
 
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_run_ping_tap_routing(self):
-        """This test simulates a point to point connection between two hosts using two tap devices"""
+        """This test simulates a point to point connection between two hosts
+        using two tap devices"""
         n1 = netns.Node()
         n2 = netns.Node()
         n3 = netns.Node()
@@ -186,4 +190,4 @@ class TestGlobal(unittest.TestCase):
         self.assertEquals(a.wait(), 0)
 
 if __name__ == '__main__':
-     unittest.main()
+    unittest.main()

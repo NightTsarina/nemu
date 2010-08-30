@@ -15,7 +15,7 @@ class Graph:
         lines = self.gen_output()
         lines.insert(0, "set terminal postscript")
         lines.insert(0, "set output '%s'" % filename)
-        gnuplot = subprocess.Popen(['gnuplot', '-'], 
+        gnuplot = subprocess.Popen(['gnuplot', '-'],
                 stdin = subprocess.PIPE,
                 stdout = subprocess.PIPE,
                 stderr = subprocess.STDOUT)
@@ -27,7 +27,7 @@ class Graph:
         gnuplot = subprocess.Popen(['gnuplot', '-'], stdin = subprocess.PIPE)
         gnuplot.communicate(input = "\n".join(lines))
     def _style_to_str(self, style):
-        d = {Graph.LINE: 'lines', Graph.DOT: 'dots', Graph.POINT: 'points', 
+        d = {Graph.LINE: 'lines', Graph.DOT: 'dots', Graph.POINT: 'points',
                 Graph.LINEPOINT: 'linespoints'}
         return d[style]
     def gen_output(self, plots = None):
@@ -84,7 +84,7 @@ class Row:
     def __len__(self):
         return len(self._data1)
 #    def __repr__(self):
-#        return 
+#        return
 
 class Data:
     def __init__(self, rows = [], colnames = []):
