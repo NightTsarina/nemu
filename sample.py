@@ -36,21 +36,17 @@ if1b.add_v4_address(address = '10.0.1.1', prefix_len = 24)
 if2.add_v4_address(address = '10.0.1.2', prefix_len = 24)
 
 # Configure routing
-node0.add_route(prefix = '10.0.1.0', prefix_len = 24,
-        nexthop = '10.0.0.2')
-node2.add_route(prefix = '10.0.0.0', prefix_len = 24,
-        nexthop = '10.0.1.1')
+node0.add_route(prefix = '10.0.1.0', prefix_len = 24, nexthop = '10.0.0.2')
+node2.add_route(prefix = '10.0.0.0', prefix_len = 24, nexthop = '10.0.1.1')
 
 # Test connectivity first. Run process, hide output and check
 # return code
 null = file("/dev/null", "w")
-app0 = node0.Popen("ping -c 1 10.0.1.2", shell = True,
-        stdout = null)
+app0 = node0.Popen("ping -c 1 10.0.1.2", shell = True, stdout = null)
 ret = app0.wait()
 assert ret == 0
 
-app1 = node2.Popen("ping -c 1 10.0.0.1", shell = True,
-        stdout = null)
+app1 = node2.Popen("ping -c 1 10.0.0.1", shell = True, stdout = null)
 ret = app1.wait()
 assert ret == 0
 print "Connectivity IPv4 OK!"
