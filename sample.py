@@ -53,10 +53,10 @@ print "Connectivity IPv4 OK!"
 
 # Now test the network conditions
 # When using a args list, the shell is not needed
-app2 = node2.Popen(["ping", "-c1000000", "-f", "10.0.1.2"],
+app2 = node2.Popen(["ping", "-q", "-c100000", "-f", "10.0.1.2"],
         stdout = subprocess.PIPE)
 
-out, err = appt2.communicate()
+out, err = app2.communicate()
 
 print "Ping outout:"
 print out
