@@ -637,10 +637,7 @@ def _db64(text):
     return base64.b64decode(text[1:])
 
 def _get_file(fd, mode):
-    # XXX: In some cases we do not call dup(); maybe this should be consistent?
-    if hasattr(fd, "readline"):
-        return fd
-    # Since openfd insists on closing the fd on destruction, I need to dup()
+    # Since fdopen insists on closing the fd on destruction, I need to dup()
     if hasattr(fd, "fileno"):
         nfd = os.dup(fd.fileno())
     else:
