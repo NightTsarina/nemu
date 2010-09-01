@@ -120,7 +120,7 @@ class Node(object):
         for i in ifaces:
             if i not in self._interfaces:
                 iface = netns.interface.ImportedNodeInterface(self, i,
-                        migrate = True)
+                        migrate = False)
                 self._auto_interfaces.append(iface) # keep it referenced!
                 self._interfaces[i] = iface
         # by the way, clean up _interfaces

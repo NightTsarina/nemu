@@ -182,38 +182,39 @@ class P2PInterface(NSInterface):
 class ImportedNodeInterface(NSInterface):
     """Class to handle already existing interfaces inside a name space:
     real devices, tun devices, etc.
-    The flag 'migrate' in the constructor indicates that the interface was
-    migrated inside the name space.
+    The flag 'migrate' in the constructor indicates that the interface needs
+    to be moved inside the name space.
     On destruction, the interface will be restored to the original name space
     and will try to restore the original state."""
-    def __init__(self, node, iface, migrate = False):
+    def __init__(self, node, iface, migrate = True):
         self._slave = None
         self._migrate = migrate
         if self._migrate:
-            iface = node._slave.get_if_data(iface)
-            self._original_state = iface.copy()
-        else:
             iface = netns.iproute.get_if(iface)
             self._original_state = iface.copy()
-
             # Change the name to avoid clashes
             iface.name = self._gen_if_name()
             netns.iproute.set_if(iface)
-
+            # Migrate it
             netns.iproute.change_netns(iface, node.pid)
+        else:
+            iface = node._slave.get_if_data(iface)
+            self._original_state = iface.copy()
+
         super(ImportedNodeInterface, self).__init__(node, iface.index)
 
     def destroy(self): # override: restore as much as possible
-        if self._slave:
-            if self.index in self._slave.get_if_data():
-                if self._migrate:
-                    self._slave.set_if(self._original_state)
-                else:
-                    self._slave.change_netns(self.index, os.getpid())
-            if not self._migrate:
-                # else, assume it is in the main name space
-                netns.iproute.set_if(self._original_state)
-            self._slave = None
+        if not self._slave:
+            return
+        if self.index in self._slave.get_if_data():
+            if self._migrate:
+                self._slave.change_netns(self.index, os.getpid())
+            else:
+                self._slave.set_if(self._original_state)
+        if self._migrate:
+            # else, assume it is already in the main name space
+            netns.iproute.set_if(self._original_state)
+        self._slave = None
 
 class TapNodeInterface(NSInterface):
     """Class to create a tap interface inside a name space, it
