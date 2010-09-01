@@ -409,14 +409,4 @@ try:
 except: # pragma: no cover
     MAXFD = 256
 
-# Used to print extra info in nested exceptions
-def _custom_hook(t, v, tb): # pragma: no cover
-    if hasattr(v, "child_traceback"):
-        sys.stderr.write("Nested exception, original traceback " +
-                "(most recent call last):\n")
-        sys.stderr.write(v.child_traceback + ("-" * 70) + "\n")
-    sys.__excepthook__(t, v, tb)
-
-# XXX: somebody kill me, I deserve it :)
-sys.excepthook = _custom_hook
 

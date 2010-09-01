@@ -56,8 +56,7 @@ except:
             "continue.")
 
 def execute(cmd):
-    # FIXME: create a global debug variable
-    #print "[pid %d]" % os.getpid(), " ".join(cmd)
+    debug("execute(%s)" % cmd)
     null = open("/dev/null", "r+")
     p = subprocess.Popen(cmd, stdout = null, stderr = subprocess.PIPE)
     out, err = p.communicate()
@@ -65,6 +64,7 @@ def execute(cmd):
         raise RuntimeError("Error executing `%s': %s" % (" ".join(cmd), err))
 
 def backticks(cmd):
+    debug("backticks(%s)" % cmd)
     p = subprocess.Popen(cmd, stdout = subprocess.PIPE,
             stderr = subprocess.PIPE)
     out, err = p.communicate()
@@ -132,3 +132,15 @@ def info(message):
     logger(LOG_INFO, message)
 def debug(message):
     logger(LOG_DEBUG, message)
+
+# Used to print extra info in nested exceptions
+def _custom_hook(t, v, tb): # pragma: no cover
+    if hasattr(v, "child_traceback"):
+        sys.stderr.write("Nested exception, original traceback " +
+                "(most recent call last):\n")
+        sys.stderr.write(v.child_traceback + ("-" * 70) + "\n")
+    sys.__excepthook__(t, v, tb)
+
+# XXX: somebody kill me, I deserve it :)
+sys.excepthook = _custom_hook
+

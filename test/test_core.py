@@ -4,6 +4,7 @@
 import grp, os, pwd, select, time, unittest
 import netns, test_util
 
+netns.environ.set_log_level(netns.environ.LOG_DEBUG)
 class TestConfigure(unittest.TestCase):
     def test_config_run_as_static(self):
         # Don't allow root as default user

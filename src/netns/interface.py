@@ -2,6 +2,7 @@
 
 import os, weakref
 import netns.iproute
+from netns.environ import *
 
 __all__ = ['NodeInterface', 'P2PInterface', 'ImportedInterface',
 'ImportedNodeInterface', 'Switch']
@@ -24,8 +25,11 @@ class Interface(object):
 
     def __init__(self, index):
         self._idx = index
+        debug("%s(0x%x).__init__(), index = %d" % (self.__class__.__name__,
+            id(self), index))
 
     def __del__(self):
+        debug("%s(0x%x).__del__()" % (self.__class__.__name__, id(self)))
         self.destroy()
 
     def destroy(self):
@@ -135,10 +139,12 @@ class NodeInterface(NSInterface):
         return self._control
 
     def destroy(self):
-        if self._slave:
-            if self.index in self._slave.get_if_data():
-                self._slave.del_if(self.index)
-            self._slave = None
+        if not self._slave:
+            return
+        debug("NodeInterface(0x%x).destroy()" % id(self))
+        if self.index in self._slave.get_if_data():
+            self._slave.del_if(self.index)
+        self._slave = None
 
 class P2PInterface(NSInterface):
     """Class to create and handle point-to-point interfaces between name
@@ -174,10 +180,12 @@ class P2PInterface(NSInterface):
         raise RuntimeError(P2PInterface.__init__.__doc__)
 
     def destroy(self):
-        if self._slave:
-            if self.index in self._slave.get_if_data():
-                self._slave.del_if(self.index)
-            self._slave = None
+        if not self._slave:
+            return
+        debug("P2PInterface(0x%x).destroy()" % id(self))
+        if self.index in self._slave.get_if_data():
+            self._slave.del_if(self.index)
+        self._slave = None
 
 class ImportedNodeInterface(NSInterface):
     """Class to handle already existing interfaces inside a name space:
@@ -206,6 +214,7 @@ class ImportedNodeInterface(NSInterface):
     def destroy(self): # override: restore as much as possible
         if not self._slave:
             return
+        debug("ImportedNodeInterface(0x%x).destroy()" % id(self))
         if self.index in self._slave.get_if_data():
             if self._migrate:
                 self._slave.change_netns(self.index, os.getpid())
@@ -235,11 +244,13 @@ class TapNodeInterface(NSInterface):
         return self._fd
 
     def destroy(self):
-        if self._fd:
-            try:
-                os.close(self._fd)
-            except:
-                pass
+        if not self._fd:
+            return
+        debug("TapNodeInterface(0x%x).destroy()" % id(self))
+        try:
+            os.close(self._fd)
+        except:
+            pass
 
 class ExternalInterface(Interface):
     """Add user-facing methods for interfaces that run in the main
@@ -317,6 +328,7 @@ class ImportedInterface(ExternalInterface):
     # FIXME: register somewhere for destruction!
     def destroy(self): # override: restore as much as possible
         if self._original_state:
+            debug("ImportedInterface(0x%x).destroy()" % id(self))
             netns.iproute.set_if(self._original_state)
         self._original_state = None
 
@@ -368,6 +380,7 @@ class Switch(ExternalInterface):
     def destroy(self):
         if not self.index:
             return
+        debug("Switch(0x%x).destroy()" % id(self))
         self.up = False
         for p in self._ports.values():
             try:

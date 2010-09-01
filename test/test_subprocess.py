@@ -123,7 +123,7 @@ class TestSubprocess(unittest.TestCase):
         self.assertEquals(wait(p), 0)
 
     def test_Subprocess_basic(self):
-        node = netns.Node(nonetns = True, debug = 0)
+        node = netns.Node(nonetns = True)
         # User does not exist
         self.assertRaises(ValueError, Subprocess, node,
                 ['/bin/sleep', '1000'], user = self.nouser)
@@ -179,7 +179,7 @@ class TestSubprocess(unittest.TestCase):
         self.assertEquals(p.wait(), -signal.SIGTERM)
 
     def test_Popen(self):
-        node = netns.Node(nonetns = True, debug = 0)
+        node = netns.Node(nonetns = True)
 
         # repeat test with Popen interface
         r0, w0 = os.pipe()
@@ -269,7 +269,7 @@ class TestSubprocess(unittest.TestCase):
         self.assertEquals(p.communicate(_longstring), (_longstring, ) * 2)
 
     def test_backticks(self):
-        node = netns.Node(nonetns = True, debug = 0)
+        node = netns.Node(nonetns = True)
         self.assertEquals(backticks(node, "echo hello world"), "hello world\n")
         self.assertEquals(backticks(node, r"echo hello\ \ world"),
                 "hello  world\n")
@@ -281,7 +281,7 @@ class TestSubprocess(unittest.TestCase):
         self.assertRaises(RuntimeError, backticks_raise, node, "kill $$")
 
     def test_system(self):
-        node = netns.Node(nonetns = True, debug = 0)
+        node = netns.Node(nonetns = True)
         self.assertEquals(system(node, "true"), 0)
         self.assertEquals(system(node, "false"), 1)
 

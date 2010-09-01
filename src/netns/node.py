@@ -15,13 +15,12 @@ class Node(object):
         s = sorted(Node._nodes.items(), key = lambda x: x[0])
         return [x[1] for x in s]
 
-    def __init__(self, debug = 0, nonetns = False):
+    def __init__(self, nonetns = False):
         """Create a new node in the emulation. Implemented as a separate
         process in a new network name space. Requires root privileges to run.
 
         If keepns is true, the network name space is not created and can be
-        run as a normal user, for testing. If debug is true, details of the
-        communication protocol are printed on stderr."""
+        run as a normal user, for testing."""
 
         # Initialize attributes, in case something fails during __init__
         self._pid = self._slave = None
@@ -29,10 +28,10 @@ class Node(object):
         self._interfaces = weakref.WeakValueDictionary()
         self._auto_interfaces = [] # just to keep them alive!
 
-        fd, pid = _start_child(debug, nonetns)
+        fd, pid = _start_child(nonetns)
         self._pid = pid
-        self._debug = debug
-        self._slave = netns.protocol.Client(fd, fd, debug)
+        debug("Node(0x%x).__init__(), pid = %s" % (id(self), pid))
+        self._slave = netns.protocol.Client(fd, fd)
 
         Node._nodes[Node._nextnode] = self
         Node._nextnode += 1
@@ -42,14 +41,11 @@ class Node(object):
             self.get_interface("lo").up = True
 
     def __del__(self):
-        if self._debug: # pragma: no cover
-            sys.stderr.write("*** Node(%s) __del__\n" % self.pid)
+        debug("Node(0x%x).__del__()" % id(self))
         self.destroy()
 
     def destroy(self):
-        if self._debug: # pragma: no cover
-            sys.stderr.write("*** Node(%s) destroy\n" % self.pid)
-
+        debug("Node(0x%x).destroy()" % id(self))
         for p in self._processes.values():
             p.destroy()
         self._processes.clear()
@@ -126,8 +122,7 @@ class Node(object):
         # by the way, clean up _interfaces
         for i in list(self._interfaces): # copy before deleting!
             if i not in ifaces:
-                if self._debug:
-                    sys.stderr.write("WARNING: interface #%d went away.\n" % i)
+                notice("Node(0x%x): interface #%d went away." % (id(self), i))
                 self._interfaces[i].destroy()
                 del self._interfaces[i]
 
@@ -159,7 +154,7 @@ class Node(object):
 # Handle the creation of the child; parent gets (fd, pid), child creates and
 # runs a Server(); never returns.
 # Requires CAP_SYS_ADMIN privileges to run.
-def _start_child(debug, nonetns):
+def _start_child(nonetns):
     # Create socket pair to communicate
     (s0, s1) = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM, 0)
     # Spawn a child that will run in a loop
@@ -171,7 +166,7 @@ def _start_child(debug, nonetns):
     # FIXME: clean up signal handers, atexit functions, etc.
     try:
         s0.close()
-        srv = netns.protocol.Server(s1, s1, debug)
+        srv = netns.protocol.Server(s1, s1)
         if not nonetns:
             # create new name space
             unshare.unshare(unshare.CLONE_NEWNET)

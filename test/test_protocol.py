@@ -35,7 +35,7 @@ class TestServer(unittest.TestCase):
         (s0, s1) = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM, 0)
 
         def run_server():
-            netns.protocol.Server(s0, s0, debug = 0).run()
+            netns.protocol.Server(s0, s0).run()
         t = threading.Thread(target = run_server)
         t.start()
 
@@ -57,7 +57,7 @@ class TestServer(unittest.TestCase):
 
     def test_basic_stuff(self):
         (s0, s1) = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM, 0)
-        srv = netns.protocol.Server(s0, s0, debug = 0)
+        srv = netns.protocol.Server(s0, s0)
         s1 = s1.makefile("r+", 1)
 
         def check_error(self, cmd, code = 500):

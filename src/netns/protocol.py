@@ -3,6 +3,7 @@
 
 import base64, os, passfd, re, signal, sys, traceback, unshare
 import netns.subprocess_, netns.iproute
+from netns.environ import *
 
 try:
     from cPickle import loads, dumps
@@ -66,13 +67,12 @@ class Server(object):
     """Class that implements the communication protocol and dispatches calls
     to the required functions. Also works as the main loop for the slave
     process."""
-    def __init__(self, rfd, wfd, debug = 0):
+    def __init__(self, rfd, wfd):
+        debug("Server(0x%x).__init__()" % id(self))
         # Dictionary of valid commands
         self._commands = _proto_commands
         # Flag to stop the server
         self._closed = False
-        # Print debug info
-        self._debug = debug
         # Set to keep track of started processes
         self._children = set()
         # Buffer and flag for PROC mode
@@ -92,13 +92,11 @@ class Server(object):
         for i in range(len(clean) - 1):
             s = str(code) + "-" + clean[i] + "\n"
             self._wfd.write(s)
-            if self._debug > 1: # pragma: no cover
-                sys.stderr.write("<ans> %s" % s)
+            debug("<Reply> %s" % s)
 
         s = str(code) + " " + clean[-1] + "\n"
         self._wfd.write(s)
-        if self._debug > 1: # pragma: no cover
-            sys.stderr.write("<S> %s" % s)
+        debug("<Reply> %s" % s)
         return
 
     def readline(self):
@@ -107,8 +105,7 @@ class Server(object):
         if not line:
             self._closed = True
             return None
-        if self._debug > 1: # pragma: no cover
-            sys.stderr.write("<C> %s" % line)
+        debug("<Query> %s" % line)
         return line.rstrip()
 
     def readcmd(self):
@@ -183,8 +180,7 @@ class Server(object):
             j += 1
 
         func = getattr(self, funcname)
-        if self._debug > 2: # pragma: no cover
-            sys.stderr.write("<cmd> %s, args: %s\n" % (cmdname, args))
+        debug("Command: %s, args: %s" % (cmdname, args))
         return (func, cmdname, args)
 
     def run(self):
@@ -208,6 +204,7 @@ class Server(object):
             self._wfd.close()
         except:
             pass
+        debug("Server(0x%x) exiting" % id(self))
         # FIXME: cleanup
 
     # Commands implementation
@@ -397,16 +394,15 @@ class Server(object):
 class Client(object):
     """Client-side implementation of the communication protocol. Acts as a RPC
     service."""
-    def __init__(self, rfd, wfd, debug = 0):
-        self._debug = debug
+    def __init__(self, rfd, wfd):
+        debug("Client(0x%x).__init__()" % id(self))
         self._rfd = _get_file(rfd, "r")
         self._wfd = _get_file(wfd, "w")
         # Wait for slave to send banner
         self._read_and_check_reply()
 
     def __del__(self):
-        if self._debug:
-            sys.stderr.write("*** Client(%d) __del__\n" % id(self))
+        debug("Client(0x%x).__del__()" % id(self))
         self.shutdown()
 
     def _send_cmd(self, *args):
@@ -451,8 +447,7 @@ class Client(object):
         "Tell the client to quit."
         if not self._wfd:
             return
-        if self._debug:
-            sys.stderr.write("*** Client(%d) shutdown\n" % id(self))
+        debug("Client(0x%x).shutdown()" % id(self))
 
         self._send_cmd("QUIT")
         self._read_and_check_reply()
