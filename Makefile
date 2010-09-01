@@ -29,14 +29,14 @@ test: all
 	retval=0; \
 	for i in `find "$(TEST)" -perm -u+x -type f`; do \
 		echo $$i; \
-		PYTHONPATH="$(BUILDDIR):$$PYTHONPATH" $$i || retval=$$?; \
+		PYTHONPATH="$(BUILDDIR)" $$i || retval=$$?; \
 		done; exit $$retval
 
 coverage: all
 	rm -f .coverage
 	for i in `find "$(TEST)" -perm -u+x -type f`; do \
 		set -e; \
-		PYTHONPATH="$(BUILDDIR):$$PYTHONPATH" $(COVERAGE) -x $$i; \
+		PYTHONPATH="$(BUILDDIR)" $(COVERAGE) -x $$i; \
 		done
 	$(COVERAGE) -c
 	$(COVERAGE) -r -m `find "$(BUILDDIR)" -name \\*.py -type f`
