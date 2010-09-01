@@ -371,7 +371,8 @@ class Switch(ExternalInterface):
         # Set ports
         if name in ('up', 'mtu'):
             for i in self._ports.values():
-                setattr(i, name, value)
+                if self._check_port(i.index):
+                    setattr(i, name, value)
         # Set bridge
         iface = netns.iproute.bridge(index = self.index)
         setattr(iface, name, value)
@@ -381,12 +382,15 @@ class Switch(ExternalInterface):
         if not self.index:
             return
         debug("Switch(0x%x).destroy()" % id(self))
+
+        # Verify they are still there
+        for p in self._ports.keys():
+            self._check_port(p)
+
         self.up = False
         for p in self._ports.values():
-            try:
-                self.disconnect(p)
-            except:
-                pass
+            self.disconnect(p)
+
         self._ports.clear()
         netns.iproute.del_bridge(self.index)
         self._idx = None
@@ -403,8 +407,20 @@ class Switch(ExternalInterface):
         iface.control.mtu = self.mtu
         self._ports[iface.control.index] = iface.control
 
+    def _check_port(self, port_index):
+        ports = netns.iproute.get_bridge_data()[2]
+        if self.index in ports and port_index in ports[self.index]:
+            return True
+        # else
+        warning("Switch(0x%x): Port (index = %d) went away." % (id(self),
+            port_index))
+        del self._ports[port_index]
+        return False
+
     def disconnect(self, iface):
         assert iface.control.index in self._ports
+        if not self._check_port(iface.control.index):
+            return
         netns.iproute.del_bridge_port(self.index, iface.control.index)
         self._apply_parameters({}, iface.control)
         del self._ports[iface.control.index]
