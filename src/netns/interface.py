@@ -333,11 +333,14 @@ class Switch(ExternalInterface):
         """Creates a new Switch object, which models a linux bridge device.
         Parameters are passed to the set_parameters() method after
         creation."""
+        # attributes init
+        self._idx = None
+        self._parameters = {}
+        self._ports = weakref.WeakValueDictionary()
+
         iface = netns.iproute.create_bridge(self._gen_br_name())
         super(Switch, self).__init__(iface.index)
 
-        self._parameters = {}
-        self._ports = weakref.WeakValueDictionary()
         # FIXME: is this correct/desirable/etc?
         self.stp = False
         self.forward_delay = 0
