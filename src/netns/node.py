@@ -96,8 +96,8 @@ class Node(object):
             setattr(i, k, v)
         return i
 
-    def add_tap(self, **kwargs):
-        i = netns.interface.TapNodeInterface(self)
+    def add_tap(self, use_pi = False, **kwargs):
+        i = netns.interface.TapNodeInterface(self, use_pi)
         for k, v in kwargs.items():
             setattr(i, k, v)
         return i

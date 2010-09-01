@@ -195,7 +195,7 @@ class address(object):
         h = (self.address.__hash__() ^ self.prefix_len.__hash__() ^
                 self.family.__hash__())
         return h
- 
+
 class ipv4address(address):
     def __init__(self, address, prefix_len, broadcast):
         self.address = address
@@ -899,7 +899,7 @@ def set_tc(iface, bandwidth = None, delay = None, delay_jitter = None,
     for c in commands:
         execute(c)
 
-def create_tap(iface):
+def create_tap(iface, use_pi = False):
     """Creates a tap device and returns the associated file descriptor"""
     if isinstance(iface, str):
         iface = interface(name = iface)
@@ -907,11 +907,15 @@ def create_tap(iface):
 
     IFF_TAP     = 0x0002
     IFF_NO_PI   = 0x1000
-    TUNSETIFF = 0x400454ca   
-    mode = IFF_TAP | IFF_NO_PI
+    TUNSETIFF   = 0x400454ca
+    mode = IFF_TAP
+    if not use_pi:
+        mode |= IFF_NO_PI
+
     fd = os.open("/dev/net/tun", os.O_RDWR)
     if fd == -1:
         raise RuntimeError("Could not open /dev/net/tun")
+
     err = fcntl.ioctl(fd, TUNSETIFF, struct.pack("16sH", iface.name, mode))
     if err < 0:
         os.close(fd)
