@@ -1,10 +1,14 @@
 # vim:ts=4:sw=4:et:ai:sts=4
 
-import os, subprocess
+import os, os.path, subprocess, sys, syslog
+from syslog import LOG_ERR, LOG_WARNING, LOG_NOTICE, LOG_INFO, LOG_DEBUG
 
 __all__ = ["ip_path", "tc_path", "brctl_path", "sysctl_path", "hz"]
 __all__ += ["tcpdump_path", "netperf_path"]
 __all__ += ["execute", "backticks"]
+__all__ += ["LOG_ERR", "LOG_WARNING", "LOG_NOTICE", "LOG_INFO", "LOG_DEBUG"]
+__all__ += ["set_log_level", "logger"]
+__all__ += ["error", "warning", "notice", "info", "debug"]
 
 def find_bin(name, extra_path = None):
     search = []
@@ -68,3 +72,63 @@ def backticks(cmd):
         raise RuntimeError("Error executing `%s': %s" % (" ".join(cmd), err))
     return out
 
+# Logging
+_log_level = LOG_WARNING
+_log_use_syslog = False
+_log_stream = sys.stderr
+_log_syslog_opts = ()
+_log_pid = os.getpid()
+
+def set_log_level(level):
+    "Sets the log level for console messages, does not affect syslog logging."
+    global _log_level
+    assert level > LOG_ERR and level <= LOG_DEBUG
+    _log_level = level
+
+def set_log_output(file):
+    "Redirect console messages to the provided stream."
+    global _log_stream
+    assert hasattr(file, "write") and hasattr(file, "flush")
+    _log_stream = file
+
+def log_use_syslog(use = True, ident = None, logopt = 0,
+        facility = syslog.LOG_USER):
+    "Enable or disable the use of syslog for logging messages."
+    global _log_use_syslog, _log_syslog_opts
+    if not use:
+        if _log_use_syslog:
+            syslog.closelog()
+        _log_use_syslog = False
+        return
+    if not ident:
+        #ident = os.path.basename(sys.argv[0])
+        ident = "netns"
+    syslog.openlog("%s[%d]" % (ident, os.getpid()), logopt, facility)
+    _log_syslog_opts = (ident, logopt, facility)
+    _log_use_syslog = True
+    info("Syslog logging started")
+
+def logger(priority, message):
+    "Print a log message in syslog, console or both."
+    global _log_use_syslog, _log_stream
+    if _log_use_syslog:
+        if os.getpid() != _log_pid:
+            # Re-init logging
+            log_use_syslog(_log_use_syslog, *_log_syslog_opts)
+        syslog.syslog(priority, message)
+        return
+    if priority > _log_level:
+        return
+    _log_stream.write("[%d] %s\n" % (os.getpid(), message.rstrip()))
+    _log_stream.flush()
+
+def error(message):
+    logger(LOG_ERR, message)
+def warning(message):
+    logger(LOG_WARNING, message)
+def notice(message):
+    logger(LOG_NOTICE, message)
+def info(message):
+    logger(LOG_INFO, message)
+def debug(message):
+    logger(LOG_DEBUG, message)
