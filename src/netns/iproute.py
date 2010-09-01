@@ -589,6 +589,8 @@ def del_bridge_port(br, iface):
     brname = _get_if_name(br)
     execute([brctl_path, "delif", brname, ifname])
 
+# Routing
+
 def get_all_route_data():
     ipdata = backticks([ip_path, "-o", "route", "list"]) # "table", "all"
     ipdata += backticks([ip_path, "-o", "-f", "inet6", "route", "list"])
