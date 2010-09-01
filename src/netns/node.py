@@ -45,6 +45,8 @@ class Node(object):
         self.destroy()
 
     def destroy(self):
+        if not self._pid:
+            return
         debug("Node(0x%x).destroy()" % id(self))
         for p in self._processes.values():
             p.destroy()
@@ -57,6 +59,10 @@ class Node(object):
 
         if self._slave:
             self._slave.shutdown()
+        exitcode = os.waitpid(self._pid, 0)[1]
+        if exitcode != 0:
+            error("Node(0x%x) process %d exited with non-zero status: %d" %
+                    (id(self), self._pid, exitcode))
         self._pid = self._slave = None
 
     @property
