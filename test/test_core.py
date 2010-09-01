@@ -105,7 +105,7 @@ class TestGlobal(unittest.TestCase):
         n2 = netns.Node()
 
         tap1 = n1.add_tap()
-        tap2  = n2.add_tap()
+        tap2 = n2.add_tap()
         tap1.up = tap2.up = True
 
         tap1.add_v4_address('10.0.1.1', 24)
