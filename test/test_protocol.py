@@ -11,6 +11,16 @@ class TestServer(unittest.TestCase):
         (s0, s1) = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM, 0)
         (s2, s3) = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM, 0)
 
+        def test_help(fd):
+            fd.write("HELP\n")
+            # should be more than one line
+            self.assertEquals(fd.readline()[0:4], "200-")
+            while True:
+                l = fd.readline()
+                self.assertEquals(l[0:3], "200")
+                if l[3] == ' ':
+                    break
+
         def run_server():
             srv = netns.protocol.Server(s0, s0)
             srv.run()
@@ -22,11 +32,13 @@ class TestServer(unittest.TestCase):
 
         s = os.fdopen(s1.fileno(), "r+", 1)
         self.assertEquals(s.readline()[0:4], "220 ")
+        test_help(s)
         s.close()
         s0.close()
 
         s = os.fdopen(s3.fileno(), "r+", 1)
         self.assertEquals(s.readline()[0:4], "220 ")
+        test_help(s)
         s.close()
         s2.close()
         t.join()

@@ -172,6 +172,28 @@ class TestSubprocess(unittest.TestCase):
         self.assertEquals(p.wait(), -signal.SIGTERM) # no-op
         self.assertEquals(p.poll(), -signal.SIGTERM) # no-op
 
+        # destroy
+        p = Subprocess(node, ['sleep', '100'])
+        pid = p.pid
+        os.kill(pid, 0) # verify process still there
+        p.destroy()
+        self.assertRaises(OSError, os.kill, pid, 0) # should be dead by now
+
+        # forceful destroy
+        # Command: ignore SIGTERM, write \n to synchronise and then sleep while
+        # closing stdout (so _readall finishes)
+        cmd = 'trap "" SIGTERM; echo; exec sleep 100 > /dev/null'
+
+        r, w = os.pipe()
+        p = Subprocess(node, cmd, shell = True, stdout = w)
+        os.close(w)
+        self.assertEquals(_readall(r), "\n") # wait for trap to be installed
+        os.close(r)
+        pid = p.pid
+        os.kill(pid, 0) # verify process still there
+        p.destroy()
+        self.assertRaises(OSError, os.kill, pid, 0) # should be dead by now
+
         p = Subprocess(node, ['sleep', '100'])
         os.kill(p.pid, signal.SIGTERM)
         time.sleep(0.2)
