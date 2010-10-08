@@ -253,7 +253,7 @@ def backticks_raise(node, args):
 # Server-side code, called from netns.protocol.Server
 
 def spawn(executable, argv = None, cwd = None, env = None, close_fds = False,
-        stdin = None, stdout = None, stderr = None, user = None):
+        stdin = None, stdout = None, stderr = None, user = None, x11 = None):
     """Internal function that performs all the dirty work for Subprocess, Popen
     and friends. This is executed in the slave process, directly from the
     protocol.Server class.
@@ -299,6 +299,13 @@ def spawn(executable, argv = None, cwd = None, env = None, close_fds = False,
     pid = os.fork()
     if pid == 0: # pragma: no cover
         # coverage doesn't seem to understand fork
+        if x11 is not None:
+            if env is None:
+                env = {}
+            env['DISPLAY'] = 'unix:0'
+            env['LD_PRELOAD'] = 'src/lib/libconnectwrapper.so'
+            env['NETNS_X11_FD'] = str(x11)
+
         try:
             # Set up stdio piping
             for i in range(3):
@@ -314,13 +321,18 @@ def spawn(executable, argv = None, cwd = None, env = None, close_fds = False,
 
             if close_fds == True:
                 for i in xrange(3, MAXFD):
-                    if i != w:
-                        try:
-                            os.close(i)
-                        except:
-                            pass
+                    if i == w:
+                        continue
+                    if x11 is not None and i == x11:
+                        continue
+                    try:
+                        os.close(i)
+                    except:
+                        pass
             elif close_fds != False:
                 for i in close_fds:
+                    if x11 is not None and i == x11:
+                        continue
                     os.close(i)
 
             if user != None:

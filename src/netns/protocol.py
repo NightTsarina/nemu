@@ -58,6 +58,7 @@ _proc_commands = {
             "SIN":  ("", ""),
             "SOUT": ("", ""),
             "SERR": ("", ""),
+            "X11": ("", ""),
             "RUN":  ("", ""),
             "ABRT": ("", ""),
             }
@@ -261,12 +262,13 @@ class Server(object):
             self.reply(500, "Invalid payload: %s." % payload)
             return
 
-        m = {'PROC SIN': 'stdin', 'PROC SOUT': 'stdout', 'PROC SERR': 'stderr'}
+        m = {'PROC SIN': 'stdin', 'PROC SOUT': 'stdout', 'PROC SERR': 'stderr',
+                'PROC X11': 'x11'}
         self._proc[m[cmdname]] = fd
         self.reply(200, 'FD saved as %s.' % m[cmdname])
 
     # Same code for the three commands
-    do_PROC_SOUT = do_PROC_SERR = do_PROC_SIN
+    do_PROC_SOUT = do_PROC_SERR = do_PROC_X11 = do_PROC_SIN
 
     def do_PROC_RUN(self, cmdname):
         params = self._proc
@@ -470,6 +472,45 @@ class Client(object):
             raise
         self._read_and_check_reply()
 
+    def _create_x_socket(self):
+        import os
+        import socket
+        import re
+        if not os.environ.has_key('DISPLAY'):
+            use_unix = True
+            display = '0'
+        else:
+            disp = os.environ['DISPLAY']
+            m = re.match('([^:]+)(:([0-9]+))?', disp)
+            if m is None:
+                use_unix = True
+                display = '0'
+            else:
+                host = m.group(1)
+                display = m.group(3)
+                if host == 'unix':
+                    use_unix = True
+                else:
+                    use_unix = False
+                if display is None:
+                    display = '0'
+        try:
+            if use_unix:
+                fd = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                fd.connect('/tmp/.X11-unix/X' + display)
+            else:
+                fd = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                port = 6000 + int(display)
+                fd.connect((host, port))
+            return fd
+        except:
+            return None
+ 
+       
+    def _send_x11_fd(self):
+        fd = self._create_x_socket()
+        if fd is not None:
+            self._send_fd('X11', fd.fileno())
     def spawn(self, argv, executable = None,
             stdin = None, stdout = None, stderr = None,
             cwd = None, env = None, user = None):
@@ -510,6 +551,8 @@ class Client(object):
                 self._send_fd("SOUT", stdout)
             if stderr != None:
                 self._send_fd("SERR", stderr)
+
+            self._send_x11_fd()
         except:
             self._send_cmd("PROC", "ABRT")
             self._read_and_check_reply()
