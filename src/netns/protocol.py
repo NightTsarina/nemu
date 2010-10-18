@@ -505,15 +505,15 @@ class Client(object):
             return fd
         except:
             return None
- 
        
     def _send_x11_fd(self):
         fd = self._create_x_socket()
         if fd is not None:
             self._send_fd('X11', fd.fileno())
+
     def spawn(self, argv, executable = None,
             stdin = None, stdout = None, stderr = None,
-            cwd = None, env = None, user = None):
+            cwd = None, env = None, user = None, X = False):
         """Start a subprocess in the slave; the interface resembles
         subprocess.Popen, but with less functionality. In particular
         stdin/stdout/stderr can only be None or a open file descriptor.
@@ -552,7 +552,8 @@ class Client(object):
             if stderr != None:
                 self._send_fd("SERR", stderr)
 
-            self._send_x11_fd()
+            if X == True:
+                self._send_x11_fd()
         except:
             self._send_cmd("PROC", "ABRT")
             self._read_and_check_reply()
