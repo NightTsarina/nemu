@@ -915,8 +915,6 @@ def create_tap(iface, use_pi = False):
         mode |= IFF_NO_PI
 
     fd = os.open("/dev/net/tun", os.O_RDWR)
-    if fd == -1:
-        raise RuntimeError("Could not open /dev/net/tun")
 
     err = fcntl.ioctl(fd, TUNSETIFF, struct.pack("16sH", iface.name, mode))
     if err < 0:
@@ -926,12 +924,8 @@ def create_tap(iface, use_pi = False):
     try:
         set_if(iface)
     except:
-        (t, v, bt) = sys.exc_info()
-        try:
-            os.close(fd)
-        except:
-            pass
-        raise t, v, bt
+        os.close(fd)
+        raise
     interfaces = get_if_data()[1]
     return interfaces[iface.name], fd
 
