@@ -182,7 +182,7 @@ class TestSubprocess(unittest.TestCase):
         # forceful destroy
         # Command: ignore SIGTERM, write \n to synchronise and then sleep while
         # closing stdout (so _readall finishes)
-        cmd = 'trap "" SIGTERM; echo; exec sleep 100 > /dev/null'
+        cmd = 'trap "" TERM; echo; exec sleep 100 > /dev/null'
 
         r, w = os.pipe()
         p = Subprocess(node, cmd, shell = True, stdout = w)
