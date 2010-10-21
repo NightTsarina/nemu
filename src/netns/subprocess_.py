@@ -18,7 +18,7 @@ class Subprocess(object):
     default_user = None
     def __init__(self, node, argv, executable = None,
             stdin = None, stdout = None, stderr = None,
-            shell = False, cwd = None, env = None, user = None, X = False):
+            shell = False, cwd = None, env = None, user = None):
         self._slave = node._slave
         """Forks and execs a program, with stdio redirection and user
         switching.
@@ -32,8 +32,6 @@ class Subprocess(object):
         command as, after setting its primary and secondary groups. If a
         numerical UID is given, a reverse lookup is performed to find the user
         name and then set correctly the groups.
-
-        The `X` parameter indicates if the subprocess will use the x11 server
 
         To run the program in a different directory than the current one, it
         should be set in `cwd'.
@@ -66,7 +64,7 @@ class Subprocess(object):
         # happens in another process!
         self._pid = self._slave.spawn(argv, executable = executable,
                 stdin = stdin, stdout = stdout, stderr = stderr,
-                cwd = cwd, env = env, user = user, X=X)
+                cwd = cwd, env = env, user = user)
 
         node._add_subprocess(self)
 
@@ -132,7 +130,7 @@ class Popen(Subprocess):
 
     def __init__(self, node, argv, executable = None,
             stdin = None, stdout = None, stderr = None, bufsize = 0,
-            shell = False, cwd = None, env = None, user = None, X = False):
+            shell = False, cwd = None, env = None, user = None):
         """As in Subprocess, `node' specifies the netns Node to run in.
 
         The `stdin', `stdout', and `stderr' parameters also accept the special
@@ -166,7 +164,7 @@ class Popen(Subprocess):
         super(Popen, self).__init__(node, argv, executable = executable,
                 stdin = fdmap['stdin'], stdout = fdmap['stdout'],
                 stderr = fdmap['stderr'],
-                shell = shell, cwd = cwd, env = env, user = user, X = X)
+                shell = shell, cwd = cwd, env = env, user = user)
 
         # Close pipes, they have been dup()ed to the child
         for k, v in fdmap.items():
@@ -255,7 +253,7 @@ def backticks_raise(node, args):
 # Server-side code, called from netns.protocol.Server
 
 def spawn(executable, argv = None, cwd = None, env = None, close_fds = False,
-        stdin = None, stdout = None, stderr = None, user = None, x11 = None):
+        stdin = None, stdout = None, stderr = None, user = None):
     """Internal function that performs all the dirty work for Subprocess, Popen
     and friends. This is executed in the slave process, directly from the
     protocol.Server class.
@@ -301,16 +299,6 @@ def spawn(executable, argv = None, cwd = None, env = None, close_fds = False,
     pid = os.fork()
     if pid == 0: # pragma: no cover
         # coverage doesn't seem to understand fork
-        if x11 is not None:
-            if env is None:
-                env = {}
-            env['DISPLAY'] = 'unix:0'
-	        if 'NETNS_LD_PRELOAD' in os.environ:
-                env['LD_PRELOAD'] = os.environ['NETNS_LD_PRELOAD']
-	        else:
-                env['LD_PRELOAD'] = 'src/lib/libconnectwrapper.so'
-	        env['NETNS_X11_FD'] = str(x11)
-
         try:
             # Set up stdio piping
             for i in range(3):
@@ -326,18 +314,13 @@ def spawn(executable, argv = None, cwd = None, env = None, close_fds = False,
 
             if close_fds == True:
                 for i in xrange(3, MAXFD):
-                    if i == w:
-                        continue
-                    if x11 is not None and i == x11:
-                        continue
-                    try:
-                        os.close(i)
-                    except:
-                        pass
+                    if i != w:
+                        try:
+                            os.close(i)
+                        except:
+                            pass
             elif close_fds != False:
                 for i in close_fds:
-                    if x11 is not None and i == x11:
-                        continue
                     os.close(i)
 
             if user != None:

@@ -27,7 +27,6 @@ PROC	ENV	k v k v...	200/500			(3)
 PROC	SIN			354+200/500		(4)
 PROC	SOUT			354+200/500		(4)
 PROC	SERR			354+200/500		(4)
-PROC	X11			354+200/500		(4)
 PROC	RUN			200 <pid>/500		(5)
 PROC	ABRT			200			(5)
 PROC	POLL	<pid>		200 <code>/450/500	check if process alive
