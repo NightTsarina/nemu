@@ -45,7 +45,7 @@ coverage: all
 clean:
 	./setup.py clean
 	rm -f `find -name \*.pyc` .coverage *.pcap
-	$(MAKE) -C $(PWD)/benchmarks/ clean
+	$(MAKE) -C $(CURDIR)/benchmarks/ clean
 
 distclean: clean
 	rm -rf "$(DISTDIR)"
