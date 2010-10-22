@@ -1,11 +1,14 @@
 #!/usr/bin/env python
 # vim:ts=4:sw=4:et:ai:sts=4
-import netns, subprocess
+import os, netns, subprocess, time
+
+xterm = netns.environ.find_bin("xterm")
+X = "DISPLAY" in os.environ and xterm
 
 # each Node is a netns
-node0 = netns.Node()
-node1 = netns.Node()
-node2 = netns.Node()
+node0 = netns.Node(forward_X11 = X)
+node1 = netns.Node(forward_X11 = X)
+node2 = netns.Node(forward_X11 = X)
 print "Nodes started with pids: %s" % str((node0.pid, node1.pid,
     node2.pid))
 
@@ -17,8 +20,8 @@ if1a = netns.NodeInterface(node1)
 
 switch0 = netns.Switch(
         bandwidth = 100 * 1024 * 1024,
-        delay = 0.01, # 10 ms
-        delay_jitter = 0.001, # 1ms
+        delay = 0.1, # 100 ms
+        delay_jitter = 0.01, # 10ms
         delay_correlation = 0.25, # 25% correlation
         loss = 0.005)
 
@@ -50,6 +53,16 @@ app1 = node2.Popen("ping -c 1 10.0.0.1", shell = True, stdout = null)
 ret = app1.wait()
 assert ret == 0
 print "Connectivity IPv4 OK!"
+
+if X:
+    app1 = node1.Popen("%s -geometry -0+0 -e %s -ni %s" %
+            (xterm, netns.environ.tcpdump_path, if1b.name), shell = True)
+    time.sleep(3)
+    app0 = node0.Popen("%s -geometry +0+0 -e ping -c 10 10.0.1.2" % xterm,
+            shell = True)
+    app0.wait()
+    app1.signal()
+    app1.wait()
 
 # Now test the network conditions
 # When using a args list, the shell is not needed
