@@ -1,11 +1,12 @@
 # vim:ts=4:sw=4:et:ai:sts=4
 
-import os, os.path, subprocess, sys, syslog
+import os, os.path, socket, subprocess, sys, syslog
 from syslog import LOG_ERR, LOG_WARNING, LOG_NOTICE, LOG_INFO, LOG_DEBUG
 
 __all__ = ["ip_path", "tc_path", "brctl_path", "sysctl_path", "hz"]
-__all__ += ["tcpdump_path", "netperf_path"]
+__all__ += ["tcpdump_path", "netperf_path", "xauth_path", "xdpyinfo_path"]
 __all__ += ["execute", "backticks"]
+__all__ += ["find_listen_port"]
 __all__ += ["LOG_ERR", "LOG_WARNING", "LOG_NOTICE", "LOG_INFO", "LOG_DEBUG"]
 __all__ += ["set_log_level", "logger"]
 __all__ += ["error", "warning", "notice", "info", "debug"]
@@ -44,6 +45,8 @@ sysctl_path = find_bin_or_die("sysctl")
 # Optional tools
 tcpdump_path = find_bin("tcpdump")
 netperf_path = find_bin("netperf")
+xauth_path = find_bin("xauth")
+xdpyinfo_path = find_bin("xdpyinfo")
 
 # Seems this is completely bogus. At least, we can assume that the internal HZ
 # is bigger than this.
@@ -71,6 +74,17 @@ def backticks(cmd):
     if p.returncode != 0:
         raise RuntimeError("Error executing `%s': %s" % (" ".join(cmd), err))
     return out
+
+def find_listen_port(family = socket.AF_INET, type = socket.SOCK_STREAM,
+        proto = 0, addr = "127.0.0.1", min_port = 1, max_port = 65535):
+    s = socket.socket(family, type, proto)
+    for p in range(min_port, max_port + 1):
+        try:
+            s.bind((addr, p))
+            return s, p
+        except socket.error:
+            pass
+    raise RuntimeError("Cannot find an usable port in the range specified")
 
 # Logging
 _log_level = LOG_WARNING

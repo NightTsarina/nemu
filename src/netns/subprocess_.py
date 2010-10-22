@@ -4,7 +4,7 @@
 import fcntl, grp, os, pickle, pwd, signal, select, sys, time, traceback
 
 __all__ = [ 'PIPE', 'STDOUT', 'Popen', 'Subprocess', 'spawn', 'wait', 'poll',
-        'system', 'backticks', 'backticks_raise' ]
+        'get_user', 'system', 'backticks', 'backticks_raise' ]
 
 # User-facing interfaces
 
@@ -280,19 +280,7 @@ def spawn(executable, argv = None, cwd = None, env = None, close_fds = False,
     assert not (set([0, 1, 2]) & set(filtered_userfd))
 
     if user != None:
-        if str(user).isdigit():
-            uid = int(user)
-            try:
-                user = pwd.getpwuid(uid)[0]
-            except:
-                raise ValueError("UID %d does not exist" % int(user))
-        else:
-            try:
-                uid = pwd.getpwnam(str(user))[2]
-            except:
-                raise ValueError("User %s does not exist" % str(user))
-
-        gid = pwd.getpwuid(uid)[3]
+        user, uid, gid = get_user(user)
         groups = [x[2] for x in grp.getgrall() if user in x[3]]
 
     (r, w) = os.pipe()
@@ -390,6 +378,21 @@ def wait(pid):
     """Wait for process to die and return the exit code."""
     return _eintr_wrapper(os.waitpid, pid, 0)[1]
 
+def get_user(user):
+    "Take either an username or an uid, and return a tuple (user, uid, gid)."
+    if str(user).isdigit():
+        uid = int(user)
+        try:
+            user = pwd.getpwuid(uid)[0]
+        except KeyError:
+            raise ValueError("UID %d does not exist" % int(user))
+    else:
+        try:
+            uid = pwd.getpwnam(str(user))[2]
+        except KeyError:
+            raise ValueError("User %s does not exist" % str(user))
+    gid = pwd.getpwuid(uid)[3]
+    return user, uid, gid
 
 # internal stuff, do not look!
 

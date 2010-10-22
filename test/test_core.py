@@ -189,5 +189,31 @@ class TestGlobal(unittest.TestCase):
 
         self.assertEquals(a.wait(), 0)
 
+class TestX11(unittest.TestCase):
+    @test_util.skipUnless("DISPLAY" in os.environ, "Test requires working X11")
+    @test_util.skipUnless(netns.environ.xdpyinfo_path, "Test requires xdpyinfo")
+    def test_run_xdpyinfo(self):
+        xdpy = netns.environ.xdpyinfo_path
+        info = netns.environ.backticks([xdpy])
+        # remove first line, contains the display name
+        info = info.partition("\n")[2]
+        n = netns.Node(nonetns = True, forward_X11 = True)
+        info2 = n.backticks([xdpy])
+        info2 = info2.partition("\n")[2]
+        self.assertEquals(info, info2)
+
+    @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
+    @test_util.skipUnless("DISPLAY" in os.environ, "Test requires working X11")
+    @test_util.skipUnless(netns.environ.xdpyinfo_path, "Test requires xdpyinfo")
+    def test_run_xdpyinfo_netns(self):
+        xdpy = netns.environ.xdpyinfo_path
+        info = netns.environ.backticks([xdpy])
+        # remove first line, contains the display name
+        info = info.partition("\n")[2]
+        n = netns.Node(forward_X11 = True)
+        info2 = n.backticks([xdpy])
+        info2 = info2.partition("\n")[2]
+        self.assertEquals(info, info2)
+
 if __name__ == '__main__':
     unittest.main()

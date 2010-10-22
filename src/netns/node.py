@@ -15,7 +15,7 @@ class Node(object):
         s = sorted(Node._nodes.items(), key = lambda x: x[0])
         return [x[1] for x in s]
 
-    def __init__(self, nonetns = False):
+    def __init__(self, nonetns = False, forward_X11 = False):
         """Create a new node in the emulation. Implemented as a separate
         process in a new network name space. Requires root privileges to run.
 
@@ -32,6 +32,8 @@ class Node(object):
         self._pid = pid
         debug("Node(0x%x).__init__(), pid = %s" % (id(self), pid))
         self._slave = netns.protocol.Client(fd, fd)
+        if forward_X11:
+            self._slave.enable_x11_forwarding()
 
         Node._nodes[Node._nextnode] = self
         Node._nextnode += 1

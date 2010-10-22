@@ -32,6 +32,7 @@ PROC	ABRT			200			(5)
 PROC	POLL	<pid>		200 <code>/450/500	check if process alive
 PROC	WAIT	<pid>		200 <code>/500		waitpid(pid)
 PROC	KILL	<pid> <signal>	200/500			kill(pid, signal)
+X11		<prot> <data>	354+200/500		(6)
 
 (1) valid arguments: mtu <n>, up <0|1>, name <name>, lladdr <addr>,
 broadcast <addr>, multicast <0|1>, arp <0|1>.
@@ -51,6 +52,10 @@ command. Answers 200/500 after processing the file descriptor.
 (5) Secondary PROC commands, unconditionally end the PROC transaction. If RUN
 was successful, the process is started and the process ID is returned as the
 first token of the reply.
+
+(6) Enable X11 forwarding, using the specified protocol and data for
+authentication. A opened socket ready to receive X connections is passed over
+the channel. Answers 200/500 after transmitting the file descriptor.
 
 Sample session
 --------------

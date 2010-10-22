@@ -1,7 +1,8 @@
 #!/usr/bin/env python
 # vim:ts=4:sw=4:et:ai:sts=4
 
-import base64, os, passfd, re, signal, sys, traceback, unshare
+import base64, os, passfd, re, select, signal, socket, sys, tempfile, time
+import traceback, unshare
 import netns.subprocess_, netns.iproute
 from netns.environ import *
 
@@ -24,6 +25,10 @@ except:
 _proto_commands = {
         "QUIT": { None: ("", "") },
         "HELP": { None: ("", "") },
+        "X11":  {
+            "SET":  ("ss", ""),
+            "SOCK": ("", "")
+            },
         "IF": {
             "LIST": ("", "i"),
             "SET":  ("iss", "s*"),
@@ -63,6 +68,8 @@ _proc_commands = {
             }
         }
 
+KILL_WAIT = 3 # seconds
+
 class Server(object):
     """Class that implements the communication protocol and dispatches calls
     to the required functions. Also works as the main loop for the slave
@@ -77,9 +84,36 @@ class Server(object):
         self._children = set()
         # Buffer and flag for PROC mode
         self._proc = None
+        # temporary xauth files
+        self._xauthfiles = {}
+        # X11 forwarding info
+        self._xfwd = None
+        self._xsock = None
 
         self._rfd = _get_file(rfd, "r")
         self._wfd = _get_file(wfd, "w")
+
+    def clean(self):
+        for pid in self._children:
+            os.kill(pid, signal.SIGTERM)
+        now = time.time()
+        while time.time() - now < KILL_WAIT:
+            ch = [pid for pid in self._children
+                    if not netns.subprocess_.poll(pid)]
+            if not ch:
+                break
+            time.sleep(0.1)
+        for pid in ch:
+            warning("Killing forcefully process %d." % pid)
+            os.kill(pid, signal.SIGKILL)
+        for pid in self._children:
+            netns.subprocess_.poll(pid)
+
+        for f in self._xauthfiles.values():
+            try:
+                os.unlink(f)
+            except:
+                pass
 
     def reply(self, code, text):
         "Send back a reply to the client; handle multiline messages"
@@ -204,6 +238,7 @@ class Server(object):
             self._wfd.close()
         except:
             pass
+        self.clean()
         debug("Server(0x%x) exiting" % id(self))
         # FIXME: cleanup
 
@@ -274,6 +309,38 @@ class Server(object):
         self._proc = None
         self._commands = _proto_commands
 
+        if 'env' not in params:
+            params['env'] = dict(os.environ) # copy
+
+        xauth = None
+        if self._xfwd:
+            display, protoname, hexkey = self._xfwd
+            user = params['user'] if 'user' in params else None
+            try:
+                fd, xauth = tempfile.mkstemp()
+                os.close(fd)
+                # stupid xauth format: needs the 'hostname' for local
+                # connections
+                execute([xauth_path, "-f", xauth, "add",
+                    "%s/unix:%d" % (socket.gethostname(), display),
+                    protoname, hexkey])
+                if user:
+                    user, uid, gid = netns.subprocess_.get_user(user)
+                    os.chown(xauth, uid, gid)
+
+                params['env']['DISPLAY'] = "127.0.0.1:%d" % display
+                params['env']['XAUTHORITY'] = xauth
+
+            except Exception, e:
+                warning("Cannot forward X: %s" % e)
+                try:
+                    os.unlink(xauth)
+                except:
+                    pass
+        else:
+            if 'DISPLAY' in params['env']:
+                del params['env']['DISPLAY']
+
         try:
             chld = netns.subprocess_.spawn(**params)
         finally:
@@ -283,6 +350,7 @@ class Server(object):
                     os.close(params[d])
 
         self._children.add(chld)
+        self._xauthfiles[chld] = xauth
         self.reply(200, "%d running." % chld)
 
     def do_PROC_ABRT(self, cmdname):
@@ -301,6 +369,12 @@ class Server(object):
 
         if ret != None:
             self._children.remove(pid)
+            if pid in self._xauthfiles:
+                try:
+                    os.unlink(self._xauthfiles[pid])
+                except:
+                    pass
+                del self._xauthfiles[pid]
             self.reply(200, "%d exitcode." % ret)
         else:
             self.reply(450, "Not finished yet.")
@@ -387,6 +461,39 @@ class Server(object):
             nexthop, ifnr or None, metric))
         self.reply(200, "Done.")
 
+    def do_X11_SET(self, cmdname, protoname, hexkey):
+        if not xauth_path:
+            self.reply(500, "Impossible to forward X: xauth not present")
+            return
+        skt, port = None, None
+        try:
+            skt, port = find_listen_port(min_port = 6010, max_port = 6099)
+        except:
+            self.reply(500, "Cannot allocate a port for X forwarding.")
+            return
+        display = port - 6000
+
+        self.reply(200, "Socket created on port %d. Use X11 SOCK to get the "
+                "file descriptor "
+                "(fixed 1-byte payload before protocol response).")
+        self._xfwd = display, protoname, hexkey
+        self._xsock = skt
+
+    def do_X11_SOCK(self, cmdname):
+        if not self._xsock:
+            self.reply(500, "X forwarding not set up.")
+            return
+        # Needs to be a separate command to handle synch & buffering issues
+        try:
+            passfd.sendfd(self._wfd, self._xsock.fileno(), "1")
+        except:
+            # need to fill the buffer on the other side, nevertheless
+            self._wfd.write("1")
+            self.reply(500, "Error sending file descriptor.")
+            return
+        self._xsock = None
+        self.reply(200, "Will set up X forwarding.")
+
 # ============================================================================
 #
 # Client-side protocol implementation.
@@ -398,6 +505,7 @@ class Client(object):
         debug("Client(0x%x).__init__()" % id(self))
         self._rfd = _get_file(rfd, "r")
         self._wfd = _get_file(wfd, "w")
+        self._forwarder = None
         # Wait for slave to send banner
         self._read_and_check_reply()
 
@@ -455,6 +563,9 @@ class Client(object):
         self._rfd = None
         self._wfd.close()
         self._wfd = None
+        if self._forwarder:
+            os.kill(self._forwarder, signal.SIGTERM)
+            self._forwarder = None
 
     def _send_fd(self, name, fd):
         "Pass a file descriptor"
@@ -614,7 +725,35 @@ class Client(object):
                 route.interface or 0, route.metric or 0]
         self._send_cmd(*args)
         self._read_and_check_reply()
- 
+
+    def set_x11(self, protoname, hexkey):
+        # Returns a socket ready to accept() connections
+        self._send_cmd("X11", "SET", protoname, hexkey)
+        self._read_and_check_reply()
+        # Receive the socket
+        self._send_cmd("X11", "SOCK")
+        fd, payload = passfd.recvfd(self._rfd, 1)
+        self._read_and_check_reply()
+        skt = socket.fromfd(fd, socket.AF_INET, socket.SOCK_DGRAM)
+        os.close(fd) # fromfd dup()'s
+        return skt
+
+    def enable_x11_forwarding(self):
+        xinfo = _parse_display()
+        if not xinfo:
+            raise RuntimeError("Impossible to forward X: DISPLAY variable not "
+                    "set or invalid")
+        if not xauth_path:
+            raise RuntimeError("Impossible to forward X: xauth not present")
+        auth = backticks([xauth_path, "list", os.environ["DISPLAY"]])
+        match = re.match(r"\S+\s+(\S+)\s+(\S+)\n", auth)
+        if not match:
+            raise RuntimeError("Impossible to forward X: invalid DISPLAY")
+        protoname, hexkey = match.groups()
+
+        server = self.set_x11(protoname, hexkey)
+        self._forwarder = _spawn_x11_forwarder(server, *xinfo)
+
 def _b64(text):
     if text == None:
         # easier this way
@@ -638,4 +777,97 @@ def _get_file(fd, mode):
     else:
         nfd = os.dup(fd)
     return os.fdopen(nfd, mode, 1)
+
+def _parse_display():
+    if "DISPLAY" not in os.environ:
+        return None
+    dpy = os.environ["DISPLAY"]
+    match = re.search(r"^(.*):(\d+)(?:\.(\d+))$", dpy)
+    if not match:
+        return None
+    if match.group(1):
+        sock = (socket.AF_INET, socket.SOCK_STREAM, 0)
+        addr = (match.group(1), 6000 + int(match.group(2)))
+    else:
+        sock = (socket.AF_UNIX, socket.SOCK_STREAM, 0)
+        addr = ("/tmp/.X11-unix/X%d" % int(match.group(2)))
+    return sock, addr
+
+def _spawn_x11_forwarder(server, xsock, xaddr):
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server.listen(10) # arbitrary
+    pid = os.fork()
+    if pid:
+        return pid
+    # XXX: clear signals, etc
+    try:
+        _x11_forwarder(server, xsock, xaddr)
+    except:
+        traceback.print_exc(file=sys.stderr)
+    os._exit(1)
+
+def _x11_forwarder(server, xsock, xaddr):
+    commr = {}
+    commw = {}
+    while(True):
+        toread = [x for x in commr.keys() if commr[x]["in"]] + [server]
+        towrite = [x for x in commw.keys() if commw[x]["buf"]]
+        (rr, wr, er) = select.select(toread, towrite, [])
+
+        if server in rr:
+            xconn = socket.socket(*xsock)
+            xconn.connect(xaddr)
+            client, addr = server.accept()
+            commr[xconn.fileno()] = commw[client.fileno()] = {
+                "in":  xconn,
+                "out": client,
+                "buf": []}
+            commw[xconn.fileno()] = commr[client.fileno()] = {
+                "in":  client,
+                "out": xconn,
+                "buf": []}
+            continue
+
+        for fd in rr:
+            try:
+                s = os.read(fd, 4096)
+            except OSError, e:
+                if e.errno != errno.EINTR:
+                    raise
+                if s == "":
+                    continue
+            if s == "":
+                # fd closed
+                #commr[fd]["in"].shutdown(socket.SHUT_RD)
+                if not commr[fd]["buf"]:
+                    commr[fd]["out"].shutdown(socket.SHUT_WR)
+                commr[fd]["in"] = None
+            else:
+                commr[fd]["buf"].append(s)
+
+        for fd in wr:
+            try:
+                x = os.write(fd, commw[fd]["buf"][0])
+            except OSError, e:
+                if e.errno == errno.EINTR:
+                    if x > 0:
+                        pass
+                    else:
+                        continue
+                if e.errno != errno.EPIPE:
+                    raise
+                # broken pipe, discard output and close
+                commw[fd]["in"].shutdown(socket.SHUT_RD)
+                commw[fd]["out"].shutdown(socket.SHUT_WR)
+                del commr[commw[fd]["in"].fileno()]
+                del commw[fd]
+                continue
+
+            if x < len(commw[fd]["buf"][0]):
+                commw[fd]["buf"][0] = commw[fd]["buf"][0][x:]
+            else:
+                del commw[fd]["buf"][0]
+            if not commw[fd]["buf"] and not commw[fd]["in"]:
+                commw[fd]["out"].shutdown(socket.SHUT_WR)
+                del commw[fd]["out"]
 
