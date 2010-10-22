@@ -281,7 +281,12 @@ def spawn(executable, argv = None, cwd = None, env = None, close_fds = False,
 
     if user != None:
         user, uid, gid = get_user(user)
+        home = pwd.getpwuid(uid)[5]
         groups = [x[2] for x in grp.getgrall() if user in x[3]]
+        if not env:
+            env = dict(os.environ)
+        env['HOME'] = home
+        env['USER'] = user
 
     (r, w) = os.pipe()
     pid = os.fork()
