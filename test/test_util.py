@@ -27,7 +27,7 @@ def process_ipcmd(str):
             continue
         # Assume cur is defined
         assert cur != None
-        match = re.search(r'^\s+link/\S* ([0-9a-f:]+)(?: |$)', line)
+        match = re.search(r'^\s+link/\S*(?: ([0-9a-f:]+))?(?: |$)', line)
         if match != None:
             out[cur]['lladdr'] = match.group(1)
             continue
@@ -49,7 +49,7 @@ def process_ipcmd(str):
                 'family': 'inet6'})
             continue
 
-        match = re.search(r'^\s{6}', line)
+        match = re.search(r'^\s{4}', line)
         assert match != None
     return out
 
