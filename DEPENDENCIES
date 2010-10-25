@@ -5,3 +5,5 @@ python-unshare		http://pypi.python.org/pypi/python-unshare
 python-passfd		http://pypi.python.org/pypi/python-passfd
 
 linux-kernel >= 2.6.35	http://kernel.org/
+bridge-utils
+iproute
