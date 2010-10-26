@@ -135,7 +135,15 @@ class Server(object):
 
     def readline(self):
         "Read a line from the socket and detect connection break-up."
-        line = self._rfd.readline()
+        # FIXME: should use the _eintr_wrapper from subprocess: some
+        # reorganization needed first.
+        while True:
+            try:
+                line = self._rfd.readline()
+            except IOError, e:
+                if e.errno != errno.EINTR:
+                    raise
+            break
         if not line:
             self._closed = True
             return None
