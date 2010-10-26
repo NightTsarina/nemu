@@ -815,67 +815,100 @@ def _spawn_x11_forwarder(server, xsock, xaddr):
     os._exit(1)
 
 def _x11_forwarder(server, xsock, xaddr):
-    commr = {}
-    commw = {}
+    toread = set([server])
+    idx = {}
     while(True):
-        toread = [x for x in commr.keys() if commr[x]["in"]] + [server]
-        towrite = [x for x in commw.keys() if commw[x]["buf"]]
+        towrite = [x["wr"] for x in idx.values() if x["buf"]]
+        assert all(map(lambda x: len(idx[idx[fd]["rd"]]["buf"]), towrite))
+        assert all(map(lambda x: idx[x]["rd"] == x, idx))
+        assert all(map(lambda x: idx[idx[x]["wr"]]["wr"] == x, idx))
         (rr, wr, er) = select.select(toread, towrite, [])
 
         if server in rr:
             xconn = socket.socket(*xsock)
             xconn.connect(xaddr)
             client, addr = server.accept()
-            commr[xconn.fileno()] = commw[client.fileno()] = {
-                "in":  xconn,
-                "out": client,
-                "buf": []}
-            commw[xconn.fileno()] = commr[client.fileno()] = {
-                "in":  client,
-                "out": xconn,
-                "buf": []}
+            toread.add(client)
+            toread.add(xconn)
+            idx[client] = {
+                    "rd":       client,
+                    "wr":       xconn,
+                    "buf":      [],
+                    "closed":   False
+                    }
+            idx[xconn] = {
+                    "rd":       xconn,
+                    "wr":       client,
+                    "buf":      [],
+                    "closed":   False
+                    }
             continue
 
         for fd in rr:
+            chan = idx[fd]
             try:
-                s = os.read(fd, 4096)
+                s = os.read(fd.fileno(), 4096)
             except OSError, e:
                 if e.errno != errno.EINTR:
                     raise
-                if s == "":
-                    continue
+                continue
             if s == "":
                 # fd closed
-                #commr[fd]["in"].shutdown(socket.SHUT_RD)
-                if not commr[fd]["buf"]:
-                    commr[fd]["out"].shutdown(socket.SHUT_WR)
-                commr[fd]["in"] = None
+                toread.remove(fd)
+                chan["closed"] = True
+                if not chan["buf"]:
+                    # close the writing side
+                    try:
+                        chan["wr"].shutdown(socket.SHUT_WR)
+                    except:
+                        pass # might fail sometimes
             else:
-                commr[fd]["buf"].append(s)
+                chan["buf"].append(s)
 
         for fd in wr:
+            chan = idx[idx[fd]["wr"]]
             try:
-                x = os.write(fd, commw[fd]["buf"][0])
+                x = os.write(fd.fileno(), chan["buf"][0])
             except OSError, e:
                 if e.errno == errno.EINTR:
-                    if x > 0:
-                        pass
-                    else:
-                        continue
+                    continue
                 if e.errno != errno.EPIPE:
                     raise
                 # broken pipe, discard output and close
-                commw[fd]["in"].shutdown(socket.SHUT_RD)
-                commw[fd]["out"].shutdown(socket.SHUT_WR)
-                del commr[commw[fd]["in"].fileno()]
-                del commw[fd]
+                try:
+                    chan["rd"].shutdown(socket.SHUT_RD)
+                    chan["wr"].shutdown(socket.SHUT_WR)
+                except:
+                    pass
+                toread.remove(chan["rd"])
+                chan["closed"] = 1
+                chan["buf"] = None
                 continue
 
-            if x < len(commw[fd]["buf"][0]):
-                commw[fd]["buf"][0] = commw[fd]["buf"][0][x:]
+            if x < len(chan["buf"][0]):
+                chan["buf"][0] = chan["buf"][x:]
             else:
-                del commw[fd]["buf"][0]
-            if not commw[fd]["buf"] and not commw[fd]["in"]:
-                commw[fd]["out"].shutdown(socket.SHUT_WR)
-                del commw[fd]["out"]
+                del chan["buf"][0]
+            if not chan["buf"] and chan["closed"]:
+                chan["wr"].shutdown(socket.SHUT_WR)
+                chan["buf"] = None
 
+        # clean-up
+        for chan in idx.values():
+            if chan["rd"] not in idx:
+                # already deleted
+                continue
+            twin = idx[chan["wr"]]
+            if not chan["closed"] or chan["buf"] or not twin["closed"] \
+                    or twin["buf"]:
+                continue
+            try:
+                chan["rd"].close()
+            except:
+                pass
+            try:
+                chan["wr"].close()
+            except:
+                pass
+            del idx[chan["rd"]]
+            del idx[chan["wr"]]
