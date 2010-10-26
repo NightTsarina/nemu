@@ -819,9 +819,6 @@ def _x11_forwarder(server, xsock, xaddr):
     idx = {}
     while(True):
         towrite = [x["wr"] for x in idx.values() if x["buf"]]
-        assert all(map(lambda x: len(idx[idx[fd]["rd"]]["buf"]), towrite))
-        assert all(map(lambda x: idx[x]["rd"] == x, idx))
-        assert all(map(lambda x: idx[idx[x]["wr"]]["wr"] == x, idx))
         (rr, wr, er) = select.select(toread, towrite, [])
 
         if server in rr:
