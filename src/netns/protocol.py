@@ -816,6 +816,25 @@ def _spawn_x11_forwarder(server, xsock, xaddr):
     os._exit(1)
 
 def _x11_forwarder(server, xsock, xaddr):
+    def clean(idx, toread, fd):
+        # silently discards any buffer!
+        fd1 = fd
+        fd2 = idx[fd]["wr"]
+        try:
+            fd1.close()
+        except:
+            pass
+        try:
+            fd2.close()
+        except:
+            pass
+        del idx[fd1]
+        if fd1 in toread:
+            toread.remove(fd1)
+        del idx[fd2]
+        if fd2 in toread:
+            toread.remove(fd2)
+
     toread = set([server])
     idx = {}
     while(True):
@@ -847,11 +866,16 @@ def _x11_forwarder(server, xsock, xaddr):
             try:
                 s = os.read(fd.fileno(), 4096)
             except OSError, e:
-                if e.errno != errno.EINTR:
+                if e.errno == errno.ECONNRESET:
+                    clean(idx, toread, fd)
+                    continue
+                elif e.errno == errno.EINTR:
+                    continue
+                else:
                     raise
-                continue
+
             if s == "":
-                # fd closed
+                # fd closed for read
                 toread.remove(fd)
                 chan["closed"] = True
                 if not chan["buf"]:
@@ -870,18 +894,10 @@ def _x11_forwarder(server, xsock, xaddr):
             except OSError, e:
                 if e.errno == errno.EINTR:
                     continue
-                if e.errno != errno.EPIPE:
-                    raise
-                # broken pipe, discard output and close
-                try:
-                    chan["rd"].shutdown(socket.SHUT_RD)
-                    chan["wr"].shutdown(socket.SHUT_WR)
-                except:
-                    pass
-                toread.remove(chan["rd"])
-                chan["closed"] = 1
-                chan["buf"] = None
-                continue
+                if e.errno == errno.EPIPE or e.errno == errno.ECONNRESET:
+                    clean(idx, toread, fd)
+                    continue
+                raise
 
             if x < len(chan["buf"][0]):
                 chan["buf"][0] = chan["buf"][x:]
@@ -900,13 +916,4 @@ def _x11_forwarder(server, xsock, xaddr):
             if not chan["closed"] or chan["buf"] or not twin["closed"] \
                     or twin["buf"]:
                 continue
-            try:
-                chan["rd"].close()
-            except:
-                pass
-            try:
-                chan["wr"].close()
-            except:
-                pass
-            del idx[chan["rd"]]
-            del idx[chan["wr"]]
+            clean(idx, toread, chan["rd"])
