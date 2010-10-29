@@ -141,6 +141,7 @@ class Server(object):
             try:
                 line = self._rfd.readline()
             except IOError, e:
+                line = None
                 if e.errno != errno.EINTR:
                     raise
             break
