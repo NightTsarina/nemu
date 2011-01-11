@@ -98,16 +98,26 @@ class Server(object):
             os.kill(pid, signal.SIGTERM)
         now = time.time()
         while time.time() - now < KILL_WAIT:
-            ch = [pid for pid in self._children
-                    if not netns.subprocess_.poll(pid)]
+            ch = []
+            for pid in self._children:
+                try:
+                    if not netns.subprocess_.poll(pid):
+                        ch.append(pid)
+                except OSError, e:
+                    if e.errno != errno.ECHILD:
+                        raise e
             if not ch:
                 break
             time.sleep(0.1)
         for pid in ch:
             warning("Killing forcefully process %d." % pid)
             os.kill(pid, signal.SIGKILL)
-        for pid in self._children:
-            netns.subprocess_.poll(pid)
+        for pid in ch:
+            try:
+                netns.subprocess_.poll(pid)
+            except OSError, e:
+                if e.errno != errno.ECHILD:
+                    raise e
 
         for f in self._xauthfiles.values():
             try:
