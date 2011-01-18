@@ -100,12 +100,8 @@ class Server(object):
         while time.time() - now < KILL_WAIT:
             ch = []
             for pid in self._children:
-                try:
-                    if not netns.subprocess_.poll(pid):
-                        ch.append(pid)
-                except OSError, e:
-                    if e.errno != errno.ECHILD:
-                        raise e
+                if not netns.subprocess_.poll(pid):
+                    ch.append(pid)
             if not ch:
                 break
             time.sleep(0.1)
@@ -113,11 +109,7 @@ class Server(object):
             warning("Killing forcefully process %d." % pid)
             os.kill(pid, signal.SIGKILL)
         for pid in ch:
-            try:
-                netns.subprocess_.poll(pid)
-            except OSError, e:
-                if e.errno != errno.ECHILD:
-                    raise e
+            netns.subprocess_.poll(pid)
 
         for f in self._xauthfiles.values():
             try:
@@ -545,7 +537,13 @@ class Client(object):
             raise RuntimeError("Client already shut down.")
         text = []
         while True:
-            line = self._rfd.readline().rstrip()
+            try:
+                line = self._rfd.readline().rstrip()
+            except IOError, e:
+                if e.errno == errno.EINTR:
+                    continue
+                else:
+                    raise e
             if not line:
                 raise RuntimeError("Protocol error, empty line received")
 
