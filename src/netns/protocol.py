@@ -94,28 +94,40 @@ class Server(object):
         self._wfd = _get_file(wfd, "w")
 
     def clean(self):
-        for pid in self._children:
-            os.kill(pid, signal.SIGTERM)
-        now = time.time()
-        while time.time() - now < KILL_WAIT:
-            ch = []
+        try:
             for pid in self._children:
-                if not netns.subprocess_.poll(pid):
-                    ch.append(pid)
-            if not ch:
-                break
-            time.sleep(0.1)
-        for pid in ch:
-            warning("Killing forcefully process %d." % pid)
-            os.kill(pid, signal.SIGKILL)
-        for pid in ch:
-            netns.subprocess_.poll(pid)
+                os.kill(pid, signal.SIGTERM)
+            now = time.time()
+            ch = self._children
+            while time.time() - now < KILL_WAIT:
+                for pid in set(ch):
+                    try:
+                       if netns.subprocess_.poll(pid):
+                           ch.remove(pid)
+                    except OSError, e:
+                        if e.errno == errno.ECHILD:
+                           ch.remove(pid)
+                        else:
+                            raise
+                if not ch:
+                    break
+                time.sleep(0.1)
 
-        for f in self._xauthfiles.values():
-            try:
-                os.unlink(f)
-            except:
-                pass
+            for pid in ch:
+                warning("Killing forcefully process %d." % pid)
+                os.kill(pid, signal.SIGKILL)
+            for pid in ch:
+                try:
+                    netns.subprocess_.poll(pid)
+                except OSError, e:
+                    if e.errno != errno.ECHILD:
+                        raise
+        finally:
+            for f in self._xauthfiles.values():
+                try:
+                    os.unlink(f)
+                except:
+                    pass
 
     def reply(self, code, text):
         "Send back a reply to the client; handle multiline messages"
