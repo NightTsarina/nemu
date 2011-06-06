@@ -316,6 +316,10 @@ def spawn(executable, argv = None, cwd = None, env = None, close_fds = False,
                 for i in close_fds:
                     os.close(i)
 
+            # changing process group id
+            # (it is necessary to kill the forked subprocesses)
+            os.setpgrp()
+
             if user != None:
                 # Change user
                 os.setgid(gid)

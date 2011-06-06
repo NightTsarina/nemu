@@ -96,7 +96,8 @@ class Server(object):
     def clean(self):
         try:
             for pid in self._children:
-                os.kill(pid, signal.SIGTERM)
+                # -PID to kill to whole process group
+                os.kill(-pid, signal.SIGTERM)
             now = time.time()
             ch = self._children
             while time.time() - now < KILL_WAIT:
@@ -115,7 +116,8 @@ class Server(object):
 
             for pid in ch:
                 warning("Killing forcefully process %d." % pid)
-                os.kill(pid, signal.SIGKILL)
+                # -PID to kill to whole process group
+                os.kill(-pid, signal.SIGKILL)
             for pid in ch:
                 try:
                     netns.subprocess_.poll(pid)
@@ -410,9 +412,10 @@ class Server(object):
             self.reply(500, "Process does not exist.")
             return
         if signal:
-            os.kill(pid, sig)
+            # -PID to kill to whole process group
+            os.kill(-pid, sig)
         else:
-            os.kill(pid, signal.SIGTERM)
+            os.kill(-pid, signal.SIGTERM)
         self.reply(200, "Process signalled.")
 
     def do_IF_LIST(self, cmdname, ifnr = None):
