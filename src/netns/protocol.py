@@ -158,7 +158,9 @@ class Server(object):
                 line = self._rfd.readline()
             except IOError, e:
                 line = None
-                if e.errno != errno.EINTR:
+                if e.errno == errno.EINTR:
+                    continue
+                else:
                     raise
             break
         if not line:
@@ -674,7 +676,7 @@ class Client(object):
         if code / 100 == 4:
             return None
         else:
-            raise "Error on command: %d %s" % (code, text)
+            raise RuntimeError("Error on command: %d %s" % (code, text))
 
     def wait(self, pid):
         """Equivalent to Popen.wait(). Waits for the process to finish and

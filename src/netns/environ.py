@@ -1,6 +1,6 @@
 # vim:ts=4:sw=4:et:ai:sts=4
 
-import os, os.path, socket, subprocess, sys, syslog
+import errno, os, os.path, socket, subprocess, sys, syslog
 from syslog import LOG_ERR, LOG_WARNING, LOG_NOTICE, LOG_INFO, LOG_DEBUG
 
 __all__ = ["ip_path", "tc_path", "brctl_path", "sysctl_path", "hz"]
@@ -133,7 +133,16 @@ def logger(priority, message):
         return
     if priority > _log_level:
         return
-    _log_stream.write("[%d] %s\n" % (os.getpid(), message.rstrip()))
+
+    while True:
+        try:
+            _log_stream.write("[%d] %s\n" % (os.getpid(), message.rstrip()))
+        except OSError, e: # pragma: no cover
+            if e.errno == errno.EINTR:
+                continue
+            else:
+                raise
+        break
     _log_stream.flush()
 
 def error(message):

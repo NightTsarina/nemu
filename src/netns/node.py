@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # vim:ts=4:sw=4:et:ai:sts=4
 
-import os, socket, sys, traceback, unshare, weakref
+import errno, os, socket, sys, traceback, unshare, weakref
 from netns.environ import *
 import netns.interface, netns.protocol, netns.subprocess_
 
@@ -61,7 +61,17 @@ class Node(object):
 
         if self._slave:
             self._slave.shutdown()
-        exitcode = os.waitpid(self._pid, 0)[1]
+
+        while True:
+            try:
+                exitcode = os.waitpid(self._pid, 0)[1]
+            except OSError, e: # pragma: no cover
+                if e.errno == errno.EINTR:
+                    continue
+                else:
+                    raise
+            break
+
         if exitcode != 0:
             error("Node(0x%x) process %d exited with non-zero status: %d" %
                     (id(self), self._pid, exitcode))
