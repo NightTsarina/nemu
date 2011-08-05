@@ -566,7 +566,7 @@ class Client(object):
 
             m = re.search(r'^(\d{3})([ -])(.*)', line)
             if not m:
-                raise RuntimeError("Protocol error, read: %s" % line)
+                raise RuntimeError("Protocol error, read: %r" % line)
             status = m.group(1)
             text.append(m.group(3))
             if m.group(2) == " ":
