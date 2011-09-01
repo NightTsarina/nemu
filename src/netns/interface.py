@@ -235,7 +235,7 @@ class TapNodeInterface(NSInterface):
         self._fd = None
         self._slave = None
         iface = netns.iproute.interface(name = self._gen_if_name())
-        iface, self._fd = netns.iproute.create_tap(iface, use_pi)
+        iface, self._fd = netns.iproute.create_tap(iface, use_pi = use_pi)
         netns.iproute.change_netns(iface.name, node.pid)
         super(TapNodeInterface, self).__init__(node, iface.index)
 
@@ -256,13 +256,14 @@ class TunNodeInterface(NSInterface):
     """Class to create a tun interface inside a name space, it
     can be connected to a Switch object with emulation of link
     characteristics."""
-    def __init__(self, node):
+    def __init__(self, node, use_pi = False):
         """Create a new tap interface. 'node' is the name space in which this
         interface should be put."""
         self._fd = None
         self._slave = None
         iface = netns.iproute.interface(name = self._gen_if_name())
-        iface, self._fd = netns.iproute.create_tun(iface)
+        iface, self._fd = netns.iproute.create_tap(iface, use_pi = use_pi,
+                tun = True)
         netns.iproute.change_netns(iface.name, node.pid)
         super(TunNodeInterface, self).__init__(node, iface.index)
 

@@ -901,43 +901,22 @@ def set_tc(iface, bandwidth = None, delay = None, delay_jitter = None,
     for c in commands:
         execute(c)
 
-def create_tap(iface, use_pi = False):
-    """Creates a tap device and returns the associated file descriptor"""
-    if isinstance(iface, str):
-        iface = interface(name = iface)
-    assert iface.name
-
-    IFF_TAP     = 0x0002
-    IFF_NO_PI   = 0x1000
-    TUNSETIFF   = 0x400454ca
-    mode = IFF_TAP
-    if not use_pi:
-        mode |= IFF_NO_PI
-
-    fd = os.open("/dev/net/tun", os.O_RDWR)
-
-    err = fcntl.ioctl(fd, TUNSETIFF, struct.pack("16sH", iface.name, mode))
-    if err < 0:
-        os.close(fd)
-        raise RuntimeError("Could not configure device %s" % iface.name)
-
-    try:
-        set_if(iface)
-    except:
-        os.close(fd)
-        raise
-    interfaces = get_if_data()[1]
-    return interfaces[iface.name], fd
-
-def create_tun(iface):
-    """Creates a tun device and returns the associated file descriptor"""
+def create_tap(iface, use_pi = False, tun = False):
+    """Creates a tap/tun device and returns the associated file descriptor"""
     if isinstance(iface, str):
         iface = interface(name = iface)
     assert iface.name
 
     IFF_TUN     = 0x0001
+    IFF_TAP     = 0x0002
+    IFF_NO_PI   = 0x1000
     TUNSETIFF   = 0x400454ca
-    mode = IFF_TUN
+    if tun:
+        mode = IFF_TUN
+    else:
+        mode = IFF_TAP
+    if not use_pi:
+        mode |= IFF_NO_PI
 
     fd = os.open("/dev/net/tun", os.O_RDWR)
 

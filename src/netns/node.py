@@ -116,8 +116,8 @@ class Node(object):
             setattr(i, k, v)
         return i
 
-    def add_tun(self, **kwargs):
-        i = netns.interface.TunNodeInterface(self)
+    def add_tun(self, use_pi = False, **kwargs):
+        i = netns.interface.TunNodeInterface(self, use_pi)
         for k, v in kwargs.items():
             setattr(i, k, v)
         return i
