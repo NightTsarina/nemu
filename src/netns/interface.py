@@ -252,6 +252,33 @@ class TapNodeInterface(NSInterface):
         except:
             pass
 
+class TunNodeInterface(NSInterface):
+    """Class to create a tun interface inside a name space, it
+    can be connected to a Switch object with emulation of link
+    characteristics."""
+    def __init__(self, node):
+        """Create a new tap interface. 'node' is the name space in which this
+        interface should be put."""
+        self._fd = None
+        self._slave = None
+        iface = netns.iproute.interface(name = self._gen_if_name())
+        iface, self._fd = netns.iproute.create_tun(iface)
+        netns.iproute.change_netns(iface.name, node.pid)
+        super(TunNodeInterface, self).__init__(node, iface.index)
+
+    @property
+    def fd(self):
+        return self._fd
+
+    def destroy(self):
+        if not self._fd:
+            return
+        debug("TunNodeInterface(0x%x).destroy()" % id(self))
+        try:
+            os.close(self._fd)
+        except:
+            pass
+
 class ExternalInterface(Interface):
     """Add user-facing methods for interfaces that run in the main
     namespace."""

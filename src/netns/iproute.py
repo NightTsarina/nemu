@@ -929,3 +929,28 @@ def create_tap(iface, use_pi = False):
     interfaces = get_if_data()[1]
     return interfaces[iface.name], fd
 
+def create_tun(iface):
+    """Creates a tun device and returns the associated file descriptor"""
+    if isinstance(iface, str):
+        iface = interface(name = iface)
+    assert iface.name
+
+    IFF_TUN     = 0x0001
+    TUNSETIFF   = 0x400454ca
+    mode = IFF_TUN
+
+    fd = os.open("/dev/net/tun", os.O_RDWR)
+
+    err = fcntl.ioctl(fd, TUNSETIFF, struct.pack("16sH", iface.name, mode))
+    if err < 0:
+        os.close(fd)
+        raise RuntimeError("Could not configure device %s" % iface.name)
+
+    try:
+        set_if(iface)
+    except:
+        os.close(fd)
+        raise
+    interfaces = get_if_data()[1]
+    return interfaces[iface.name], fd
+
