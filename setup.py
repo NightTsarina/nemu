@@ -2,7 +2,6 @@
 # vim: set fileencoding=utf-8
 # vim: ts=4:sw=4:et:ai:sts=4
 from distutils.core import setup, Extension, Command
-import platform
 
 setup(
         name        = 'netns',
