@@ -1,5 +1,3 @@
-# vim:ts=4:sw=4:et:ai:sts=4
-
 import copy, fcntl, os, re, socket, struct, subprocess, sys
 from netns.environ import *
 

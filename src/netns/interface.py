@@ -1,5 +1,3 @@
-# vim:ts=4:sw=4:et:ai:sts=4
-
 import os, weakref
 import netns.iproute
 from netns.environ import *

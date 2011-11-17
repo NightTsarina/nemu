@@ -1,5 +1,3 @@
-# vim:ts=4:sw=4:et:ai:sts=4
-
 import errno, os, os.path, socket, subprocess, sys, syslog
 from syslog import LOG_ERR, LOG_WARNING, LOG_NOTICE, LOG_INFO, LOG_DEBUG
 

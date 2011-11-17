@@ -1,6 +1,3 @@
-#!/usr/bin/env python
-# vim:ts=4:sw=4:et:ai:sts=4
-
 import errno, fcntl, grp, os, pickle, pwd, signal, select, sys, time, traceback
 
 __all__ = [ 'PIPE', 'STDOUT', 'Popen', 'Subprocess', 'spawn', 'wait', 'poll',
