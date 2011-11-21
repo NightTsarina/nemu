@@ -65,6 +65,30 @@ class TestGlobal(unittest.TestCase):
         self.assertEquals(a2.wait(), 0)
 
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
+    def test_run_ping_routing_p2p(self):
+        n1 = netns.Node()
+        n2 = netns.Node()
+        n3 = netns.Node()
+        i12, i21 = netns.P2PInterface.create_pair(n1, n2)
+        i23, i32 = netns.P2PInterface.create_pair(n2, n3)
+        i12.up = i21.up = i23.up = i32.up = True
+        i12.add_v4_address('10.0.0.1', 24)
+        i21.add_v4_address('10.0.0.2', 24)
+        i23.add_v4_address('10.0.1.1', 24)
+        i32.add_v4_address('10.0.1.2', 24)
+
+        n1.add_route(prefix = '10.0.1.0', prefix_len = 24,
+                nexthop = '10.0.0.2')
+        n3.add_route(prefix = '10.0.0.0', prefix_len = 24,
+                nexthop = '10.0.1.1')
+
+        null = file('/dev/null', 'wb')
+        a1 = n1.Popen(['ping', '-qc1', '10.0.1.2'], stdout = null)
+        a2 = n3.Popen(['ping', '-qc1', '10.0.0.1'], stdout = null)
+        self.assertEquals(a1.wait(), 0)
+        self.assertEquals(a2.wait(), 0)
+
+    @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_run_ping_routing(self):
         n1 = netns.Node()
         n2 = netns.Node()
