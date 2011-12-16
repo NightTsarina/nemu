@@ -1,4 +1,22 @@
 # vim:ts=4:sw=4:et:ai:sts=4
+# -*- coding: utf-8 -*-
+
+# Copyright 2010, 2011 INRIA
+# Copyright 2011 Martín Ferrari <martin.ferrari@gmail.com>
+#
+# This file is part of Nemu.
+#
+# Nemu is free software: you can redistribute it and/or modify it under the
+# terms of the GNU General Public License version 2, as published by the Free
+# Software Foundation.
+#
+# Nemu is distributed in the hope that it will be useful, but WITHOUT ANY
+# WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
+# A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along with
+# Nemu.  If not, see <http://www.gnu.org/licenses/>.
+
 import copy, fcntl, os, re, socket, struct, subprocess, sys
 from netns.environ import *
 
