@@ -97,9 +97,9 @@ class Server(object):
                 # -PID to kill to whole process group
                 os.kill(-pid, signal.SIGTERM)
             now = time.time()
-            ch = self._children
+            ch = set(self._children)
             while time.time() - now < KILL_WAIT:
-                for pid in set(ch):
+                for pid in ch:
                     try:
                        if netns.subprocess_.poll(pid):
                            ch.remove(pid)
