@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # vim:ts=4:sw=4:et:ai:sts=4
 
-import netns.protocol
+import nemu.protocol
 import os, socket, sys, threading, unittest
 
 class TestServer(unittest.TestCase):
@@ -22,10 +22,10 @@ class TestServer(unittest.TestCase):
                     break
 
         def run_server():
-            srv = netns.protocol.Server(s0, s0)
+            srv = nemu.protocol.Server(s0, s0)
             srv.run()
 
-            srv = netns.protocol.Server(s2.fileno(), s2.fileno())
+            srv = nemu.protocol.Server(s2.fileno(), s2.fileno())
             srv.run()
         t = threading.Thread(target = run_server)
         t.start()
@@ -47,11 +47,11 @@ class TestServer(unittest.TestCase):
         (s0, s1) = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM, 0)
 
         def run_server():
-            netns.protocol.Server(s0, s0).run()
+            nemu.protocol.Server(s0, s0).run()
         t = threading.Thread(target = run_server)
         t.start()
 
-        cli = netns.protocol.Client(s1, s1)
+        cli = nemu.protocol.Client(s1, s1)
 
         # make PROC SIN fail
         self.assertRaises(OSError, cli.spawn, "/bin/true", stdin = -1)
@@ -69,7 +69,7 @@ class TestServer(unittest.TestCase):
 
     def test_basic_stuff(self):
         (s0, s1) = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM, 0)
-        srv = netns.protocol.Server(s0, s0)
+        srv = nemu.protocol.Server(s0, s0)
         s1 = s1.makefile("r+", 1)
 
         def check_error(self, cmd, code = 500):
@@ -120,7 +120,7 @@ class TestServer(unittest.TestCase):
         check_error(self, "proc crte =a") # invalid b64
 
         # simulate proc mode
-        srv._commands = netns.protocol._proc_commands
+        srv._commands = nemu.protocol._proc_commands
         check_error(self, "proc crte foo")
         check_error(self, "proc poll 0")
         check_error(self, "proc wait 0")

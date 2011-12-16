@@ -18,8 +18,8 @@
 # Nemu.  If not, see <http://www.gnu.org/licenses/>.
 
 import os, pwd
-from netns.node import *
-from netns.interface import *
+from nemu.node import *
+from nemu.interface import *
 
 class __Config(object):
     def __init__(self):

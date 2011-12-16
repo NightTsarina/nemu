@@ -19,8 +19,8 @@
 
 import base64, errno, os, passfd, re, select, signal, socket, sys, tempfile
 import time, traceback, unshare
-import netns.subprocess_, netns.iproute
-from netns.environ import *
+import nemu.subprocess_, nemu.iproute
+from nemu.environ import *
 
 try:
     from cPickle import loads, dumps
@@ -119,7 +119,7 @@ class Server(object):
             while time.time() - now < KILL_WAIT:
                 for pid in ch:
                     try:
-                       if netns.subprocess_.poll(pid):
+                       if nemu.subprocess_.poll(pid):
                            ch.remove(pid)
                     except OSError, e:
                         if e.errno == errno.ECHILD:
@@ -136,7 +136,7 @@ class Server(object):
                 os.kill(-pid, signal.SIGKILL)
             for pid in ch:
                 try:
-                    netns.subprocess_.poll(pid)
+                    nemu.subprocess_.poll(pid)
                 except OSError, e:
                     if e.errno != errno.ECHILD:
                         raise
@@ -368,7 +368,7 @@ class Server(object):
                     "%s/unix:%d" % (socket.gethostname(), display),
                     protoname, hexkey])
                 if user:
-                    user, uid, gid = netns.subprocess_.get_user(user)
+                    user, uid, gid = nemu.subprocess_.get_user(user)
                     os.chown(xauth, uid, gid)
 
                 params['env']['DISPLAY'] = "127.0.0.1:%d" % display
@@ -385,7 +385,7 @@ class Server(object):
                 del params['env']['DISPLAY']
 
         try:
-            chld = netns.subprocess_.spawn(**params)
+            chld = nemu.subprocess_.spawn(**params)
         finally:
             # I can close the fds now
             for d in ('stdin', 'stdout', 'stderr'):
@@ -406,9 +406,9 @@ class Server(object):
             self.reply(500, "Process does not exist.")
             return
         if cmdname == 'PROC POLL':
-            ret = netns.subprocess_.poll(pid)
+            ret = nemu.subprocess_.poll(pid)
         else:
-            ret = netns.subprocess_.wait(pid)
+            ret = nemu.subprocess_.wait(pid)
 
         if ret != None:
             self._children.remove(pid)
@@ -438,9 +438,9 @@ class Server(object):
 
     def do_IF_LIST(self, cmdname, ifnr = None):
         if ifnr == None:
-            ifdata = netns.iproute.get_if_data()[0]
+            ifdata = nemu.iproute.get_if_data()[0]
         else:
-            ifdata = netns.iproute.get_if(ifnr)
+            ifdata = nemu.iproute.get_if(ifnr)
         self.reply(200, ["# Interface data follows.",
                 _b64(dumps(ifdata, protocol = 2))])
 
@@ -453,20 +453,20 @@ class Server(object):
         for i in range(len(args) / 2):
             d[str(args[i * 2])] = args[i * 2 + 1]
 
-        iface = netns.iproute.interface(**d)
-        netns.iproute.set_if(iface)
+        iface = nemu.iproute.interface(**d)
+        nemu.iproute.set_if(iface)
         self.reply(200, "Done.")
 
     def do_IF_RTRN(self, cmdname, ifnr, ns):
-        netns.iproute.change_netns(ifnr, ns)
+        nemu.iproute.change_netns(ifnr, ns)
         self.reply(200, "Done.")
 
     def do_IF_DEL(self, cmdname, ifnr):
-        netns.iproute.del_if(ifnr)
+        nemu.iproute.del_if(ifnr)
         self.reply(200, "Done.")
 
     def do_ADDR_LIST(self, cmdname, ifnr = None):
-        addrdata = netns.iproute.get_addr_data()[0]
+        addrdata = nemu.iproute.get_addr_data()[0]
         if ifnr != None:
             addrdata = addrdata[ifnr]
         self.reply(200, ["# Address data follows.",
@@ -474,34 +474,34 @@ class Server(object):
 
     def do_ADDR_ADD(self, cmdname, ifnr, address, prefixlen, broadcast = None):
         if address.find(":") < 0: # crude, I know
-            a = netns.iproute.ipv4address(address, prefixlen, broadcast)
+            a = nemu.iproute.ipv4address(address, prefixlen, broadcast)
         else:
-            a = netns.iproute.ipv6address(address, prefixlen)
-        netns.iproute.add_addr(ifnr, a)
+            a = nemu.iproute.ipv6address(address, prefixlen)
+        nemu.iproute.add_addr(ifnr, a)
         self.reply(200, "Done.")
 
     def do_ADDR_DEL(self, cmdname, ifnr, address, prefixlen):
         if address.find(":") < 0: # crude, I know
-            a = netns.iproute.ipv4address(address, prefixlen, None)
+            a = nemu.iproute.ipv4address(address, prefixlen, None)
         else:
-            a = netns.iproute.ipv6address(address, prefixlen)
-        netns.iproute.del_addr(ifnr, a)
+            a = nemu.iproute.ipv6address(address, prefixlen)
+        nemu.iproute.del_addr(ifnr, a)
         self.reply(200, "Done.")
 
     def do_ROUT_LIST(self, cmdname):
-        rdata = netns.iproute.get_route_data()
+        rdata = nemu.iproute.get_route_data()
         self.reply(200, ["# Routing data follows.",
             _b64(dumps(rdata, protocol = 2))])
 
     def do_ROUT_ADD(self, cmdname, tipe, prefix, prefixlen, nexthop, ifnr,
             metric):
-        netns.iproute.add_route(netns.iproute.route(tipe, prefix, prefixlen,
+        nemu.iproute.add_route(nemu.iproute.route(tipe, prefix, prefixlen,
             nexthop, ifnr or None, metric))
         self.reply(200, "Done.")
 
     def do_ROUT_DEL(self, cmdname, tipe, prefix, prefixlen, nexthop, ifnr,
             metric):
-        netns.iproute.del_route(netns.iproute.route(tipe, prefix, prefixlen,
+        nemu.iproute.del_route(nemu.iproute.route(tipe, prefix, prefixlen,
             nexthop, ifnr or None, metric))
         self.reply(200, "Done.")
 
@@ -631,7 +631,7 @@ class Client(object):
         """Start a subprocess in the slave; the interface resembles
         subprocess.Popen, but with less functionality. In particular
         stdin/stdout/stderr can only be None or a open file descriptor.
-        See netns.subprocess_.spawn for details."""
+        See nemu.subprocess_.spawn for details."""
 
         if executable == None:
             executable = argv[0]

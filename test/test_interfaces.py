@@ -2,8 +2,8 @@
 # vim:ts=4:sw=4:et:ai:sts=4
 
 from test_util import get_devs, get_devs_netns
-from netns.environ import *
-import netns, test_util
+from nemu.environ import *
+import nemu, test_util
 import os, unittest
 
 class TestUtils(unittest.TestCase):
@@ -22,7 +22,7 @@ class TestUtils(unittest.TestCase):
 class TestInterfaces(unittest.TestCase):
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_interface_creation(self):
-        node0 = netns.Node()
+        node0 = nemu.Node()
         ifaces = []
         for i in range(5):
             ifaces.append(node0.add_if())
@@ -40,12 +40,12 @@ class TestInterfaces(unittest.TestCase):
 
         devs = get_devs()
         for i in range(5):
-            peer_name = netns.iproute.get_if(ifaces[i].control.index).name
+            peer_name = nemu.iproute.get_if(ifaces[i].control.index).name
             self.assertTrue(peer_name in devs)
 
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_interface_settings(self):
-        node0 = netns.Node()
+        node0 = nemu.Node()
         if0 = node0.add_if(lladdr = '42:71:e0:90:ca:42', mtu = 1492)
         self.assertEquals(if0.lladdr, '42:71:e0:90:ca:42',
                 "Constructor parameters")
@@ -90,7 +90,7 @@ class TestInterfaces(unittest.TestCase):
 
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_interface_addresses(self):
-        node0 = netns.Node()
+        node0 = nemu.Node()
         if0 = node0.add_if()
         if0.add_v4_address(address = '10.0.0.1', prefix_len = 24,
                 broadcast = '10.0.0.255')
@@ -124,7 +124,7 @@ class TestWithDummy(unittest.TestCase):
             test_util.get_linux_ver() >= test_util.make_linux_ver("2.6.35"),
             "Test trigger a kernel bug on 2.6.34")
     def test_interface_migration(self):
-        node = netns.Node()
+        node = nemu.Node()
         self.dummyname = "dummy%d" % os.getpid()
         self.assertEquals(os.system("%s link add name %s type dummy" %
                     (ip_path, self.dummyname)), 0)

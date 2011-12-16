@@ -1,24 +1,24 @@
 #!/usr/bin/env python
 # vim:ts=4:sw=4:et:ai:sts=4
-import os, netns, subprocess, time
+import os, nemu, subprocess, time
 
-xterm = netns.environ.find_bin("xterm")
+xterm = nemu.environ.find_bin("xterm")
 X = "DISPLAY" in os.environ and xterm
 
 # each Node is a netns
-node0 = netns.Node(forward_X11 = X)
-node1 = netns.Node(forward_X11 = X)
-node2 = netns.Node(forward_X11 = X)
+node0 = nemu.Node(forward_X11 = X)
+node1 = nemu.Node(forward_X11 = X)
+node2 = nemu.Node(forward_X11 = X)
 print "Nodes started with pids: %s" % str((node0.pid, node1.pid,
     node2.pid))
 
 # interface object maps to a veth pair with one end in a netns
-if0  = netns.NodeInterface(node0)
-if1a = netns.NodeInterface(node1)
+if0  = nemu.NodeInterface(node0)
+if1a = nemu.NodeInterface(node1)
 # Between node1 and node2, we use a P2P interface
-(if1b, if2) = netns.P2PInterface.create_pair(node1, node2)
+(if1b, if2) = nemu.P2PInterface.create_pair(node1, node2)
 
-switch0 = netns.Switch(
+switch0 = nemu.Switch(
         bandwidth = 100 * 1024 * 1024,
         delay = 0.1, # 100 ms
         delay_jitter = 0.01, # 10ms
@@ -56,7 +56,7 @@ print "Connectivity IPv4 OK!"
 
 if X:
     app1 = node1.Popen("%s -geometry -0+0 -e %s -ni %s" %
-            (xterm, netns.environ.tcpdump_path, if1b.name), shell = True)
+            (xterm, nemu.environ.tcpdump_path, if1b.name), shell = True)
     time.sleep(3)
     app0 = node0.Popen("%s -geometry +0+0 -e ping -c 10 10.0.1.2" % xterm,
             shell = True)

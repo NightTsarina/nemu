@@ -1,10 +1,10 @@
 #!/usr/bin/env python
 # vim:ts=4:sw=4:et:ai:sts=4
 
-import netns, netns.subprocess_, test_util
+import nemu, nemu.subprocess_, test_util
 import grp, os, pwd, signal, socket, sys, time, unittest
 
-from netns.subprocess_ import *
+from nemu.subprocess_ import *
 
 def _stat(path):
     try:
@@ -79,7 +79,7 @@ class TestSubprocess(unittest.TestCase):
 
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_Subprocess_chuser(self):
-        node = netns.Node(nonetns = True)
+        node = nemu.Node(nonetns = True)
         user = 'nobody'
         p = Subprocess(node, ['/bin/sleep', '1000'], user = user)
         self._check_ownership(user, p.pid)
@@ -123,7 +123,7 @@ class TestSubprocess(unittest.TestCase):
         self.assertEquals(wait(p), 0)
 
     def test_Subprocess_basic(self):
-        node = netns.Node(nonetns = True)
+        node = nemu.Node(nonetns = True)
         # User does not exist
         self.assertRaises(ValueError, Subprocess, node,
                 ['/bin/sleep', '1000'], user = self.nouser)
@@ -201,7 +201,7 @@ class TestSubprocess(unittest.TestCase):
         self.assertEquals(p.wait(), -signal.SIGTERM)
 
     def test_Popen(self):
-        node = netns.Node(nonetns = True)
+        node = nemu.Node(nonetns = True)
 
         # repeat test with Popen interface
         r0, w0 = os.pipe()
@@ -291,7 +291,7 @@ class TestSubprocess(unittest.TestCase):
         self.assertEquals(p.communicate(_longstring), (_longstring, ) * 2)
 
     def test_backticks(self):
-        node = netns.Node(nonetns = True)
+        node = nemu.Node(nonetns = True)
         self.assertEquals(backticks(node, "echo hello world"), "hello world\n")
         self.assertEquals(backticks(node, r"echo hello\ \ world"),
                 "hello  world\n")
@@ -303,7 +303,7 @@ class TestSubprocess(unittest.TestCase):
         self.assertRaises(RuntimeError, backticks_raise, node, "kill $$")
 
     def test_system(self):
-        node = netns.Node(nonetns = True)
+        node = nemu.Node(nonetns = True)
         self.assertEquals(system(node, "true"), 0)
         self.assertEquals(system(node, "false"), 1)
 

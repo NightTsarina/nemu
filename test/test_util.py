@@ -2,8 +2,8 @@
 # vim:ts=4:sw=4:et:ai:sts=4
 
 import os, re, subprocess, sys
-import netns.subprocess_
-from netns.environ import *
+import nemu.subprocess_
+from nemu.environ import *
 
 def process_ipcmd(str):
     cur = None
@@ -58,7 +58,7 @@ def get_devs():
     return process_ipcmd(outdata)
 
 def get_devs_netns(node):
-    out = netns.subprocess_.backticks_raise(node, [ip_path, "addr", "list"])
+    out = nemu.subprocess_.backticks_raise(node, [ip_path, "addr", "list"])
     return process_ipcmd(out)
 
 def make_linux_ver(string):

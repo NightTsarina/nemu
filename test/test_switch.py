@@ -2,16 +2,16 @@
 # vim:ts=4:sw=4:et:ai:sts=4
 
 import os, unittest
-import netns, test_util, netns.environ
+import nemu, test_util, nemu.environ
 
 class TestSwitch(unittest.TestCase):
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def setUp(self):
-        n1 = netns.Node()
-        n2 = netns.Node()
+        n1 = nemu.Node()
+        n2 = nemu.Node()
         i1 = n1.add_if()
         i2 = n2.add_if()
-        l = netns.Switch()
+        l = nemu.Switch()
         l.connect(i1)
         l.connect(i2)
         self.stuff = (n1, n2, i1, i2, l)
@@ -20,7 +20,7 @@ class TestSwitch(unittest.TestCase):
     def test_switch_base(self):
         (n1, n2, i1, i2, l) = self.stuff
         l.mtu = 3000
-        ifdata = netns.iproute.get_if_data()[0]
+        ifdata = nemu.iproute.get_if_data()[0]
         self.assertEquals(ifdata[l.index].mtu, 3000)
         self.assertEquals(ifdata[i1.control.index].mtu, 3000,
                 "MTU propagation")
@@ -35,11 +35,11 @@ class TestSwitch(unittest.TestCase):
                 "UP propagation")
 
         l.up = True
-        ifdata = netns.iproute.get_if_data()[0]
+        ifdata = nemu.iproute.get_if_data()[0]
         self.assertEquals(ifdata[i1.control.index].up, True, "UP propagation")
         self.assertEquals(ifdata[i2.control.index].up, True, "UP propagation")
 
-        tcdata = netns.iproute.get_tc_data()[0]
+        tcdata = nemu.iproute.get_tc_data()[0]
         self.assertEquals(tcdata[i1.control.index], {"qdiscs": {}})
         self.assertEquals(tcdata[i2.control.index], {"qdiscs": {}})
 
@@ -50,11 +50,11 @@ class TestSwitch(unittest.TestCase):
         # Test strange rules handling
         os.system(("%s qd add dev %s root prio bands 3 " +
             "priomap 1 2 2 2 1 2 0 0 1 1 1 1 1 1 1 1") %
-            (netns.environ.tc_path, i1.control.name))
-        tcdata = netns.iproute.get_tc_data()[0]
+            (nemu.environ.tc_path, i1.control.name))
+        tcdata = nemu.iproute.get_tc_data()[0]
         self.assertEquals(tcdata[i1.control.index], "foreign")
         l.set_parameters(bandwidth = 13107200) # 100 mbits
-        tcdata = netns.iproute.get_tc_data()[0]
+        tcdata = nemu.iproute.get_tc_data()[0]
         self.assertEquals(tcdata[i1.control.index],
                 {"bandwidth": 13107000, "qdiscs": {"tbf": "1"}})
 
@@ -76,14 +76,14 @@ class TestSwitch(unittest.TestCase):
     def _test_none(self):
         (n1, n2, i1, i2, l) = self.stuff
         l.set_parameters()
-        tcdata = netns.iproute.get_tc_data()[0]
+        tcdata = nemu.iproute.get_tc_data()[0]
         self.assertEquals(tcdata[i1.control.index], {"qdiscs": {}})
         self.assertEquals(tcdata[i2.control.index], {"qdiscs": {}})
 
     def _test_tbf(self):
         (n1, n2, i1, i2, l) = self.stuff
         l.set_parameters(bandwidth = 13107200) # 100 mbits
-        tcdata = netns.iproute.get_tc_data()[0]
+        tcdata = nemu.iproute.get_tc_data()[0]
         self.assertEquals(tcdata[i1.control.index],
                 # adjust for tc rounding
                 {"bandwidth": 13107000, "qdiscs": {"tbf": "1"}})
@@ -93,7 +93,7 @@ class TestSwitch(unittest.TestCase):
     def _test_netem(self):
         (n1, n2, i1, i2, l) = self.stuff
         l.set_parameters(delay = 0.001) # 1ms
-        tcdata = netns.iproute.get_tc_data()[0]
+        tcdata = nemu.iproute.get_tc_data()[0]
         self.assertEquals(tcdata[i1.control.index],
                 {"delay": 0.001, "qdiscs": {"netem": "2"}})
         self.assertEquals(tcdata[i2.control.index],
@@ -102,7 +102,7 @@ class TestSwitch(unittest.TestCase):
     def _test_both(self):
         (n1, n2, i1, i2, l) = self.stuff
         l.set_parameters(bandwidth = 13107200, delay = 0.001) # 100 mbits, 1ms
-        tcdata = netns.iproute.get_tc_data()[0]
+        tcdata = nemu.iproute.get_tc_data()[0]
         self.assertEquals(tcdata[i1.control.index],
                 {"bandwidth": 13107000, "delay": 0.001,
                     "qdiscs": {"tbf": "1", "netem": "2"}})

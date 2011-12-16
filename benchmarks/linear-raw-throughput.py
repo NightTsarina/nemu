@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # vim: ts=4:sw=4:et:ai:sts=4
 
-import csv, getopt, netns, os, os.path, re, select, subprocess, sys
+import csv, getopt, nemu, os, os.path, re, select, subprocess, sys
 
 __doc__ = """Creates a linear network topology, and measures the maximum
 end-to-end throughput for the specified packet size."""
@@ -107,7 +107,7 @@ def main():
     if not (time or nbytes or packets):
         time = 10
 
-    udp_perf = netns.environ.find_bin("udp-perf",
+    udp_perf = nemu.environ.find_bin("udp-perf",
             extra_path = [".", os.path.dirname(sys.argv[0])])
     if not udp_perf:
         raise RuntimeError("Cannot find `udp-perf'")
@@ -197,11 +197,11 @@ def create_topo(n, p2p, delay, jitter, bw):
     interfaces = []
     links = []
     for i in range(n):
-        nodes.append(netns.Node())
+        nodes.append(nemu.Node())
     if p2p:
         interfaces = [[None]]
         for i in range(n - 1):
-            a, b = netns.P2PInterface.create_pair(nodes[i], nodes[i + 1])
+            a, b = nemu.P2PInterface.create_pair(nodes[i], nodes[i + 1])
             interfaces[i].append(a)
             interfaces.append([])
             interfaces[i + 1] = [b]
@@ -218,7 +218,7 @@ def create_topo(n, p2p, delay, jitter, bw):
                 right = None
             interfaces.append((left, right))
         for i in range(n - 1):
-            links = netns.Switch(bandwidth = bw, delay = delay,
+            links = nemu.Switch(bandwidth = bw, delay = delay,
                     delay_jitter = jitter)
             links.up = True
             links.connect(interfaces[i][1])

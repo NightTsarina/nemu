@@ -18,8 +18,8 @@
 # Nemu.  If not, see <http://www.gnu.org/licenses/>.
 
 import os, weakref
-import netns.iproute
-from netns.environ import *
+import nemu.iproute
+from nemu.environ import *
 
 __all__ = ['NodeInterface', 'P2PInterface', 'ImportedInterface',
 'ImportedNodeInterface', 'Switch']
@@ -94,24 +94,24 @@ class NSInterface(Interface):
         if name[0] == '_': # forbid anything that doesn't start with a _
             super(Interface, self).__setattr__(name, value)
             return
-        iface = netns.iproute.interface(index = self.index)
+        iface = nemu.iproute.interface(index = self.index)
         setattr(iface, name, value)
         return self._slave.set_if(iface)
 
     def add_v4_address(self, address, prefix_len, broadcast = None):
-        addr = netns.iproute.ipv4address(address, prefix_len, broadcast)
+        addr = nemu.iproute.ipv4address(address, prefix_len, broadcast)
         self._slave.add_addr(self.index, addr)
 
     def add_v6_address(self, address, prefix_len):
-        addr = netns.iproute.ipv6address(address, prefix_len)
+        addr = nemu.iproute.ipv6address(address, prefix_len)
         self._slave.add_addr(self.index, addr)
 
     def del_v4_address(self, address, prefix_len, broadcast = None):
-        addr = netns.iproute.ipv4address(address, prefix_len, broadcast)
+        addr = nemu.iproute.ipv4address(address, prefix_len, broadcast)
         self._slave.del_addr(self.index, addr)
 
     def del_v6_address(self, address, prefix_len):
-        addr = netns.iproute.ipv6address(address, prefix_len)
+        addr = nemu.iproute.ipv6address(address, prefix_len)
         self._slave.del_addr(self.index, addr)
 
     def get_addresses(self):
@@ -139,13 +139,13 @@ class NodeInterface(NSInterface):
         """Create a new interface. `node' is the name space in which this
         interface should be put."""
         self._slave = None
-        if1 = netns.iproute.interface(name = self._gen_if_name())
-        if2 = netns.iproute.interface(name = self._gen_if_name())
-        ctl, ns = netns.iproute.create_if_pair(if1, if2)
+        if1 = nemu.iproute.interface(name = self._gen_if_name())
+        if2 = nemu.iproute.interface(name = self._gen_if_name())
+        ctl, ns = nemu.iproute.create_if_pair(if1, if2)
         try:
-            netns.iproute.change_netns(ns, node.pid)
+            nemu.iproute.change_netns(ns, node.pid)
         except:
-            netns.iproute.del_if(ctl)
+            nemu.iproute.del_if(ctl)
             # the other interface should go away automatically
             raise
         self._control = SlaveInterface(ctl.index)
@@ -173,14 +173,14 @@ class P2PInterface(NSInterface):
     def create_pair(node1, node2):
         """Create and return a pair of connected P2PInterface objects,
         assigned to name spaces represented by `node1' and `node2'."""
-        if1 = netns.iproute.interface(name = P2PInterface._gen_if_name())
-        if2 = netns.iproute.interface(name = P2PInterface._gen_if_name())
-        pair = netns.iproute.create_if_pair(if1, if2)
+        if1 = nemu.iproute.interface(name = P2PInterface._gen_if_name())
+        if2 = nemu.iproute.interface(name = P2PInterface._gen_if_name())
+        pair = nemu.iproute.create_if_pair(if1, if2)
         try:
-            netns.iproute.change_netns(pair[0], node1.pid)
-            netns.iproute.change_netns(pair[1], node2.pid)
+            nemu.iproute.change_netns(pair[0], node1.pid)
+            nemu.iproute.change_netns(pair[1], node2.pid)
         except:
-            netns.iproute.del_if(pair[0])
+            nemu.iproute.del_if(pair[0])
             # the other interface should go away automatically
             raise
 
@@ -215,13 +215,13 @@ class ImportedNodeInterface(NSInterface):
         self._slave = None
         self._migrate = migrate
         if self._migrate:
-            iface = netns.iproute.get_if(iface)
+            iface = nemu.iproute.get_if(iface)
             self._original_state = iface.copy()
             # Change the name to avoid clashes
             iface.name = self._gen_if_name()
-            netns.iproute.set_if(iface)
+            nemu.iproute.set_if(iface)
             # Migrate it
-            netns.iproute.change_netns(iface, node.pid)
+            nemu.iproute.change_netns(iface, node.pid)
         else:
             iface = node._slave.get_if_data(iface)
             self._original_state = iface.copy()
@@ -239,7 +239,7 @@ class ImportedNodeInterface(NSInterface):
                 self._slave.set_if(self._original_state)
         if self._migrate:
             # else, assume it is already in the main name space
-            netns.iproute.set_if(self._original_state)
+            nemu.iproute.set_if(self._original_state)
         self._slave = None
 
 class TapNodeInterface(NSInterface):
@@ -251,9 +251,9 @@ class TapNodeInterface(NSInterface):
         interface should be put."""
         self._fd = None
         self._slave = None
-        iface = netns.iproute.interface(name = self._gen_if_name())
-        iface, self._fd = netns.iproute.create_tap(iface, use_pi = use_pi)
-        netns.iproute.change_netns(iface.name, node.pid)
+        iface = nemu.iproute.interface(name = self._gen_if_name())
+        iface, self._fd = nemu.iproute.create_tap(iface, use_pi = use_pi)
+        nemu.iproute.change_netns(iface.name, node.pid)
         super(TapNodeInterface, self).__init__(node, iface.index)
 
     @property
@@ -278,10 +278,10 @@ class TunNodeInterface(NSInterface):
         interface should be put."""
         self._fd = None
         self._slave = None
-        iface = netns.iproute.interface(name = self._gen_if_name())
-        iface, self._fd = netns.iproute.create_tap(iface, use_pi = use_pi,
+        iface = nemu.iproute.interface(name = self._gen_if_name())
+        iface, self._fd = nemu.iproute.create_tap(iface, use_pi = use_pi,
                 tun = True)
-        netns.iproute.change_netns(iface.name, node.pid)
+        nemu.iproute.change_netns(iface.name, node.pid)
         super(TunNodeInterface, self).__init__(node, iface.index)
 
     @property
@@ -307,35 +307,35 @@ class ExternalInterface(Interface):
 
     # some black magic to automatically get/set interface attributes
     def __getattr__(self, name):
-        iface = netns.iproute.get_if(self.index)
+        iface = nemu.iproute.get_if(self.index)
         return getattr(iface, name)
 
     def __setattr__(self, name, value):
         if name[0] == '_': # forbid anything that doesn't start with a _
             super(ExternalInterface, self).__setattr__(name, value)
             return
-        iface = netns.iproute.interface(index = self.index)
+        iface = nemu.iproute.interface(index = self.index)
         setattr(iface, name, value)
-        return netns.iproute.set_if(iface)
+        return nemu.iproute.set_if(iface)
 
     def add_v4_address(self, address, prefix_len, broadcast = None):
-        addr = netns.iproute.ipv4address(address, prefix_len, broadcast)
-        netns.iproute.add_addr(self.index, addr)
+        addr = nemu.iproute.ipv4address(address, prefix_len, broadcast)
+        nemu.iproute.add_addr(self.index, addr)
 
     def add_v6_address(self, address, prefix_len):
-        addr = netns.iproute.ipv6address(address, prefix_len)
-        netns.iproute.add_addr(self.index, addr)
+        addr = nemu.iproute.ipv6address(address, prefix_len)
+        nemu.iproute.add_addr(self.index, addr)
 
     def del_v4_address(self, address, prefix_len, broadcast = None):
-        addr = netns.iproute.ipv4address(address, prefix_len, broadcast)
-        netns.iproute.del_addr(self.index, addr)
+        addr = nemu.iproute.ipv4address(address, prefix_len, broadcast)
+        nemu.iproute.del_addr(self.index, addr)
 
     def del_v6_address(self, address, prefix_len):
-        addr = netns.iproute.ipv6address(address, prefix_len)
-        netns.iproute.del_addr(self.index, addr)
+        addr = nemu.iproute.ipv6address(address, prefix_len)
+        nemu.iproute.del_addr(self.index, addr)
 
     def get_addresses(self):
-        addresses = netns.iproute.get_addr_data(self.index)
+        addresses = nemu.iproute.get_addr_data(self.index)
         ret = []
         for a in addresses:
             if hasattr(a, 'broadcast'):
@@ -363,10 +363,10 @@ class ImportedInterface(ExternalInterface):
     not migrated inside the name space. This kind of interfaces can only be
     connected to Switch objects and not assigned to a name space.  On
     destruction, the code will try to restore the interface to the state it
-    was in before being imported into netns."""
+    was in before being imported into nemu."""
     def __init__(self, iface):
         self._original_state = None
-        iface = netns.iproute.get_if(iface)
+        iface = nemu.iproute.get_if(iface)
         self._original_state = iface.copy()
         super(ImportedInterface, self).__init__(iface.index)
 
@@ -374,7 +374,7 @@ class ImportedInterface(ExternalInterface):
     def destroy(self): # override: restore as much as possible
         if self._original_state:
             debug("ImportedInterface(0x%x).destroy()" % id(self))
-            netns.iproute.set_if(self._original_state)
+            nemu.iproute.set_if(self._original_state)
         self._original_state = None
 
 # Switch is just another interface type
@@ -395,7 +395,7 @@ class Switch(ExternalInterface):
         self._parameters = {}
         self._ports = weakref.WeakValueDictionary()
 
-        iface = netns.iproute.create_bridge(self._gen_br_name())
+        iface = nemu.iproute.create_bridge(self._gen_br_name())
         super(Switch, self).__init__(iface.index)
 
         # FIXME: is this correct/desirable/etc?
@@ -406,7 +406,7 @@ class Switch(ExternalInterface):
             self.set_parameters(**args)
 
     def __getattr__(self, name):
-        iface = netns.iproute.get_bridge(self.index)
+        iface = nemu.iproute.get_bridge(self.index)
         return getattr(iface, name)
 
     def __setattr__(self, name, value):
@@ -419,9 +419,9 @@ class Switch(ExternalInterface):
                 if self._check_port(i.index):
                     setattr(i, name, value)
         # Set bridge
-        iface = netns.iproute.bridge(index = self.index)
+        iface = nemu.iproute.bridge(index = self.index)
         setattr(iface, name, value)
-        netns.iproute.set_bridge(iface)
+        nemu.iproute.set_bridge(iface)
 
     def destroy(self):
         if not self.index:
@@ -437,14 +437,14 @@ class Switch(ExternalInterface):
             self.disconnect(p)
 
         self._ports.clear()
-        netns.iproute.del_bridge(self.index)
+        nemu.iproute.del_bridge(self.index)
         self._idx = None
 
     def connect(self, iface):
         assert iface.control.index not in self._ports
         try:
             self._apply_parameters(self._parameters, iface.control)
-            netns.iproute.add_bridge_port(self.index, iface.control.index)
+            nemu.iproute.add_bridge_port(self.index, iface.control.index)
         except:
             self._apply_parameters({}, iface.control)
             raise
@@ -453,7 +453,7 @@ class Switch(ExternalInterface):
         self._ports[iface.control.index] = iface.control
 
     def _check_port(self, port_index):
-        ports = netns.iproute.get_bridge_data()[2]
+        ports = nemu.iproute.get_bridge_data()[2]
         if self.index in ports and port_index in ports[self.index]:
             return True
         # else
@@ -466,7 +466,7 @@ class Switch(ExternalInterface):
         assert iface.control.index in self._ports
         if not self._check_port(iface.control.index):
             return
-        netns.iproute.del_bridge_port(self.index, iface.control.index)
+        nemu.iproute.del_bridge_port(self.index, iface.control.index)
         self._apply_parameters({}, iface.control)
         del self._ports[iface.control.index]
 
@@ -506,5 +506,5 @@ class Switch(ExternalInterface):
 
     def _apply_parameters(self, parameters, port = None):
         for i in [port] if port else self._ports.values():
-            netns.iproute.set_tc(i.index, **parameters)
+            nemu.iproute.set_tc(i.index, **parameters)
 

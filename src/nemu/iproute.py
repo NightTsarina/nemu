@@ -18,7 +18,7 @@
 # Nemu.  If not, see <http://www.gnu.org/licenses/>.
 
 import copy, fcntl, os, re, socket, struct, subprocess, sys
-from netns.environ import *
+from nemu.environ import *
 
 # helpers
 def _any_to_bool(any):

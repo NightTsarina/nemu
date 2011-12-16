@@ -18,7 +18,7 @@
 # Nemu.  If not, see <http://www.gnu.org/licenses/>.
 
 import fcntl, grp, os, pickle, pwd, signal, select, sys, time, traceback
-from netns.environ import eintr_wrapper
+from nemu.environ import eintr_wrapper
 
 __all__ = [ 'PIPE', 'STDOUT', 'Popen', 'Subprocess', 'spawn', 'wait', 'poll',
         'get_user', 'system', 'backticks', 'backticks_raise' ]
@@ -28,7 +28,7 @@ __all__ = [ 'PIPE', 'STDOUT', 'Popen', 'Subprocess', 'spawn', 'wait', 'poll',
 KILL_WAIT = 3 # seconds
 
 class Subprocess(object):
-    """Class that allows the execution of programs inside a netns Node. This is
+    """Class that allows the execution of programs inside a nemu Node. This is
     the base class for all process operations, Popen provides a more high level
     interface."""
     # FIXME
@@ -40,7 +40,7 @@ class Subprocess(object):
         """Forks and execs a program, with stdio redirection and user
         switching.
         
-        A netns Node to run the program is is specified as the first parameter.
+        A nemu Node to run the program is is specified as the first parameter.
 
         The program is specified by `executable', if it does not contain any
         slash, the PATH environment variable is used to search for the file.
@@ -148,7 +148,7 @@ class Popen(Subprocess):
     def __init__(self, node, argv, executable = None,
             stdin = None, stdout = None, stderr = None, bufsize = 0,
             shell = False, cwd = None, env = None, user = None):
-        """As in Subprocess, `node' specifies the netns Node to run in.
+        """As in Subprocess, `node' specifies the nemu Node to run in.
 
         The `stdin', `stdout', and `stderr' parameters also accept the special
         values subprocess.PIPE or subprocess.STDOUT. Check the stdlib's
@@ -267,7 +267,7 @@ def backticks_raise(node, args):
 
 # =======================================================================
 #
-# Server-side code, called from netns.protocol.Server
+# Server-side code, called from nemu.protocol.Server
 
 def spawn(executable, argv = None, cwd = None, env = None, close_fds = False,
         stdin = None, stdout = None, stderr = None, user = None):

@@ -1,13 +1,13 @@
 #!/usr/bin/env python
 # vim:ts=4:sw=4:et:ai:sts=4
 
-import netns, test_util
+import nemu, test_util
 import os, unittest
 
 class TestRouting(unittest.TestCase):
     @test_util.skip("Programatic detection of duplicate routes not implemented")
     def test_base_routing(self):
-        node = netns.Node(nonetns = True)
+        node = nemu.Node(nonetns = True)
         routes = node.get_routes() # main netns routes!
         if(len(routes)):
             self.assertRaises(RuntimeError, node.add_route, routes[0])
@@ -16,7 +16,7 @@ class TestRouting(unittest.TestCase):
 
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_routing(self):
-        node = netns.Node()
+        node = nemu.Node()
         self.assertEquals(len(node.get_routes()), 0)
 
         if0 = node.add_if()

@@ -1,19 +1,20 @@
 #!/usr/bin/env python
-# vim: set fileencoding=utf-8
+# -*- coding: utf-8 -*-
 # vim: ts=4:sw=4:et:ai:sts=4
+
 from distutils.core import setup, Extension, Command
 
 setup(
-        name        = 'netns',
+        name        = 'nemu',
         version     = '0.1',
         description = '''A framework for creating emulated networks in a
         single host and run experiments on them''',
 #        long_description = longdesc,
-        author      = 'Martin Ferrari',
+        author      = 'Martín Ferrari',
         author_email = 'martin.ferrari@gmail.com',
-        url         = 'http://yans.pl.sophia.inria.fr/code/hgwebdir.cgi/netns/',
+        url         = 'http://code.google.com/p/nemu/',
         license     = 'GPLv2',
         platforms   = 'Linux',
-        packages    = ['netns'],
+        packages    = ['nemu'],
         package_dir = {'': 'src'}
         )

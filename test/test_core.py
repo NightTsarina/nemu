@@ -2,27 +2,27 @@
 # vim:ts=4:sw=4:et:ai:sts=4
 
 import grp, os, pwd, select, time, unittest
-import netns, test_util
+import nemu, test_util
 
 class TestConfigure(unittest.TestCase):
     def test_config_run_as_static(self):
         # Don't allow root as default user
-        self.assertRaises(AttributeError, setattr, netns.config,
+        self.assertRaises(AttributeError, setattr, nemu.config,
                 'run_as', 'root')
-        self.assertRaises(AttributeError, setattr, netns.config,
+        self.assertRaises(AttributeError, setattr, nemu.config,
                 'run_as', 0)
         # Don't allow invalid users
-        self.assertRaises(AttributeError, setattr, netns.config,
+        self.assertRaises(AttributeError, setattr, nemu.config,
                 'run_as', 'foobarbaz') # hope nobody has this user!
-        self.assertRaises(AttributeError, setattr, netns.config,
+        self.assertRaises(AttributeError, setattr, nemu.config,
                 'run_as', -1)
 
 class TestGlobal(unittest.TestCase):
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_run_ping_p2pif(self):
-        n1 = netns.Node()
-        n2 = netns.Node()
-        i1, i2 = netns.P2PInterface.create_pair(n1, n2)
+        n1 = nemu.Node()
+        n2 = nemu.Node()
+        i1, i2 = nemu.P2PInterface.create_pair(n1, n2)
         i1.up = i2.up = True
         i1.lladdr = 'd6:4b:3f:f7:ff:7e'
         i2.lladdr = 'd6:4b:3f:f7:ff:7f'
@@ -46,12 +46,12 @@ class TestGlobal(unittest.TestCase):
 
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_run_ping_node_if(self):
-        n1 = netns.Node()
-        n2 = netns.Node()
+        n1 = nemu.Node()
+        n2 = nemu.Node()
         i1 = n1.add_if()
         i2 = n2.add_if()
         i1.up = i2.up = True
-        l = netns.Switch()
+        l = nemu.Switch()
         l.connect(i1)
         l.connect(i2)
         l.up = True
@@ -66,11 +66,11 @@ class TestGlobal(unittest.TestCase):
 
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_run_ping_routing_p2p(self):
-        n1 = netns.Node()
-        n2 = netns.Node()
-        n3 = netns.Node()
-        i12, i21 = netns.P2PInterface.create_pair(n1, n2)
-        i23, i32 = netns.P2PInterface.create_pair(n2, n3)
+        n1 = nemu.Node()
+        n2 = nemu.Node()
+        n3 = nemu.Node()
+        i12, i21 = nemu.P2PInterface.create_pair(n1, n2)
+        i23, i32 = nemu.P2PInterface.create_pair(n2, n3)
         i12.up = i21.up = i23.up = i32.up = True
         i12.add_v4_address('10.0.0.1', 24)
         i21.add_v4_address('10.0.0.2', 24)
@@ -90,16 +90,16 @@ class TestGlobal(unittest.TestCase):
 
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_run_ping_routing(self):
-        n1 = netns.Node()
-        n2 = netns.Node()
-        n3 = netns.Node()
+        n1 = nemu.Node()
+        n2 = nemu.Node()
+        n3 = nemu.Node()
         i1 = n1.add_if()
         i2a = n2.add_if()
         i2b = n2.add_if()
         i3 = n3.add_if()
         i1.up = i2a.up = i2b.up = i3.up = True
-        l1 = netns.Switch()
-        l2 = netns.Switch()
+        l1 = nemu.Switch()
+        l2 = nemu.Switch()
         l1.connect(i1)
         l1.connect(i2a)
         l2.connect(i2b)
@@ -125,8 +125,8 @@ class TestGlobal(unittest.TestCase):
     def test_run_ping_tap(self):
         """This test simulates a point to point connection between two hosts
         using two tap devices"""
-        n1 = netns.Node()
-        n2 = netns.Node()
+        n1 = nemu.Node()
+        n2 = nemu.Node()
 
         tap1 = n1.add_tap()
         tap2 = n2.add_tap()
@@ -157,10 +157,10 @@ class TestGlobal(unittest.TestCase):
     def test_run_ping_tap_routing(self):
         """This test simulates a point to point connection between two hosts
         using two tap devices"""
-        n1 = netns.Node()
-        n2 = netns.Node()
-        n3 = netns.Node()
-        n4 = netns.Node()
+        n1 = nemu.Node()
+        n2 = nemu.Node()
+        n3 = nemu.Node()
+        n4 = nemu.Node()
  
         i1 = n1.add_if()
         i2 = n2.add_if()
@@ -171,8 +171,8 @@ class TestGlobal(unittest.TestCase):
 
         i1.up = i2.up = tap1.up = tap2.up = i3.up = i4.up = True
 
-        l1 = netns.Switch()
-        l2 = netns.Switch()
+        l1 = nemu.Switch()
+        l2 = nemu.Switch()
 
         l1.connect(i1)
         l1.connect(i2)
@@ -215,26 +215,26 @@ class TestGlobal(unittest.TestCase):
 
 class TestX11(unittest.TestCase):
     @test_util.skipUnless("DISPLAY" in os.environ, "Test requires working X11")
-    @test_util.skipUnless(netns.environ.xdpyinfo_path, "Test requires xdpyinfo")
+    @test_util.skipUnless(nemu.environ.xdpyinfo_path, "Test requires xdpyinfo")
     def test_run_xdpyinfo(self):
-        xdpy = netns.environ.xdpyinfo_path
-        info = netns.environ.backticks([xdpy])
+        xdpy = nemu.environ.xdpyinfo_path
+        info = nemu.environ.backticks([xdpy])
         # remove first line, contains the display name
         info = info.partition("\n")[2]
-        n = netns.Node(nonetns = True, forward_X11 = True)
+        n = nemu.Node(nonetns = True, forward_X11 = True)
         info2 = n.backticks([xdpy])
         info2 = info2.partition("\n")[2]
         self.assertEquals(info, info2)
 
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     @test_util.skipUnless("DISPLAY" in os.environ, "Test requires working X11")
-    @test_util.skipUnless(netns.environ.xdpyinfo_path, "Test requires xdpyinfo")
+    @test_util.skipUnless(nemu.environ.xdpyinfo_path, "Test requires xdpyinfo")
     def test_run_xdpyinfo_netns(self):
-        xdpy = netns.environ.xdpyinfo_path
-        info = netns.environ.backticks([xdpy])
+        xdpy = nemu.environ.xdpyinfo_path
+        info = nemu.environ.backticks([xdpy])
         # remove first line, contains the display name
         info = info.partition("\n")[2]
-        n = netns.Node(forward_X11 = True)
+        n = nemu.Node(forward_X11 = True)
         info2 = n.backticks([xdpy])
         info2 = info2.partition("\n")[2]
         self.assertEquals(info, info2)

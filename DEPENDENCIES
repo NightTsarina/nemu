@@ -1,5 +1,5 @@
-Required packages for using netns
-=================================
+Required packages for using nemu
+================================
 
 python-unshare		http://pypi.python.org/pypi/python-unshare
 python-passfd		http://pypi.python.org/pypi/python-passfd

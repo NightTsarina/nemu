@@ -1,27 +1,27 @@
 #/usr/bin/env python
 # vim:ts=4:sw=4:et:ai:sts=4
-import netns
+import nemu
 import signal
 
 # run_as: user to setuid() to before running applications (this is assumed to
 # run as root)
-netns.config.run_as = 'nobody'
+nemu.config.run_as = 'nobody'
 
 # Clean-up is essential to avoid leaving bridge devices all over the place
 # (luckily, the veths die automatically). This installs signals and exit
 # handlers.
-netns.set_cleanup_hooks(on_exit = True,
+nemu.set_cleanup_hooks(on_exit = True,
         on_signals = [signal.SIGTERM, signal.SIGINT])
 
 # each Node is a netns
-a = netns.Node()
-b = netns.Node()
+a = nemu.Node()
+b = nemu.Node()
 print "Nodes started with pids: %d and %d" % (a.pid, b.pid)
 
 # interface object maps to a veth pair with one end in a netns
 if0 = a.add_if(lladdr = '42:71:e0:90:ca:42')
 # This is equivalent
-#if0 = netns.NodeInterface(a)
+#if0 = nemu.NodeInterface(a)
 #if0.lladdr = '42:71:e0:90:ca:42'
 
 if1 = b.add_if(mtu = 1492)
@@ -31,7 +31,7 @@ if2 = b.import_if('tun0')
 
 # each Switch is a linux bridge, all the parameters are applied to the
 # associated interfaces as tc qdiscs.
-switch0 = netns.Switch(bandwidth = 100 * 1024 * 1024,
+switch0 = nemu.Switch(bandwidth = 100 * 1024 * 1024,
         delay = 0.01, delay_jitter = 0.001,
         delay_correlation = 0.25, delay_distribution = 'normal',
         loss = 0.005, loss_correlation = 0.20,
@@ -45,15 +45,15 @@ switch0.connect(if1)
 # Should be experimented with Tom Geoff's patch to see if the bridge could be
 # avoided; but for that the API would be slightly different, as these would be
 # point-to-point interfaces and links.
-# ppp0 = netns.PPPSwitch(a, b, bandwidth = ....)
+# ppp0 = nemu.PPPSwitch(a, b, bandwidth = ....)
 # if0 = ppp0.interface(a)
 
 # For now, we have simple P2P interfaces:
-(pppa, pppb) = netns.P2PInterface.create_pair(a, b)
+(pppa, pppb) = nemu.P2PInterface.create_pair(a, b)
 
 # Add and connect a tap device (as if a external router were plugged into a
 # switch)
-if2 = netns.ImportedInterface('tap0')
+if2 = nemu.ImportedInterface('tap0')
 switch0.connect(if2)
 
 switch0.up = True
@@ -78,8 +78,8 @@ addrs = if0.get_addresses()
 stats = if0.get_stats()
 routes = a.get_routes()
 ifaces = a.get_interfaces()
-nodes = netns.get_nodes()
-switches = netns.get_switches()
+nodes = nemu.get_nodes()
+switches = nemu.get_switches()
 stats = link0.get_stats()
 
 # Run a process in background
@@ -101,14 +101,14 @@ app2.wait()
 def setup_linear_topology(n, bd, delay):
     nodes = []
     for i in range(n):
-        nodes.append(netns.Node())
+        nodes.append(nemu.Node())
 
     for i in range(n - 1):
         if1 = nodes[i].add_if()
         if2 = nodes[i + 1].add_if()
         if1.add_v4_address(addr = ('10.0.%d.2' % i), prefix_len = 24)
         if2.add_v4_address(addr = ('10.0.%d.1' % i), prefix_len = 24)
-        switch = netns.Switch(bandwidth = bd, delay = delay)
+        switch = nemu.Switch(bandwidth = bd, delay = delay)
         switch.connect(if1)
         switch.connect(if2)
 

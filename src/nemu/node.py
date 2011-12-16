@@ -18,8 +18,8 @@
 # Nemu.  If not, see <http://www.gnu.org/licenses/>.
 
 import os, socket, sys, traceback, unshare, weakref
-from netns.environ import *
-import netns.interface, netns.protocol, netns.subprocess_
+from nemu.environ import *
+import nemu.interface, nemu.protocol, nemu.subprocess_
 
 __all__ = ['Node', 'get_nodes', 'import_if']
 
@@ -35,7 +35,7 @@ class Node(object):
         """Create a new node in the emulation. Implemented as a separate
         process in a new network name space. Requires root privileges to run.
 
-        If keepns is true, the network name space is not created and can be
+        If nonetns is true, the network name space is not created and can be
         run as a normal user, for testing."""
 
         # Initialize attributes, in case something fails during __init__
@@ -47,7 +47,7 @@ class Node(object):
         fd, pid = _start_child(nonetns)
         self._pid = pid
         debug("Node(0x%x).__init__(), pid = %s" % (id(self), pid))
-        self._slave = netns.protocol.Client(fd, fd)
+        self._slave = nemu.protocol.Client(fd, fd)
         if forward_X11:
             self._slave.enable_x11_forwarding()
 
@@ -93,44 +93,44 @@ class Node(object):
         self._processes[subprocess.pid] = subprocess
 
     def Subprocess(self, *kargs, **kwargs):
-        return netns.subprocess_.Subprocess(self, *kargs, **kwargs)
+        return nemu.subprocess_.Subprocess(self, *kargs, **kwargs)
 
     def Popen(self, *kargs, **kwargs):
-        return netns.subprocess_.Popen(self, *kargs, **kwargs)
+        return nemu.subprocess_.Popen(self, *kargs, **kwargs)
 
     def system(self, *kargs, **kwargs):
-        return netns.subprocess_.system(self, *kargs, **kwargs)
+        return nemu.subprocess_.system(self, *kargs, **kwargs)
 
     def backticks(self, *kargs, **kwargs):
-        return netns.subprocess_.backticks(self, *kargs, **kwargs)
+        return nemu.subprocess_.backticks(self, *kargs, **kwargs)
 
     def backticks_raise(self, *kargs, **kwargs):
-        return netns.subprocess_.backticks_raise(self, *kargs, **kwargs)
+        return nemu.subprocess_.backticks_raise(self, *kargs, **kwargs)
 
     # Interfaces
     def _add_interface(self, interface):
         self._interfaces[interface.index] = interface
 
     def add_if(self, **kwargs):
-        i = netns.interface.NodeInterface(self)
+        i = nemu.interface.NodeInterface(self)
         for k, v in kwargs.items():
             setattr(i, k, v)
         return i
 
     def add_tap(self, use_pi = False, **kwargs):
-        i = netns.interface.TapNodeInterface(self, use_pi)
+        i = nemu.interface.TapNodeInterface(self, use_pi)
         for k, v in kwargs.items():
             setattr(i, k, v)
         return i
 
     def add_tun(self, use_pi = False, **kwargs):
-        i = netns.interface.TunNodeInterface(self, use_pi)
+        i = nemu.interface.TunNodeInterface(self, use_pi)
         for k, v in kwargs.items():
             setattr(i, k, v)
         return i
 
     def import_if(self, interface):
-        return netns.interface.ImportedNodeInterface(self, interface)
+        return nemu.interface.ImportedNodeInterface(self, interface)
 
     def del_if(self, iface):
         """Doesn't destroy the interface if it wasn't created by us."""
@@ -146,7 +146,7 @@ class Node(object):
         ifaces = self._slave.get_if_data()
         for i in ifaces:
             if i not in self._interfaces:
-                iface = netns.interface.ImportedNodeInterface(self, i,
+                iface = nemu.interface.ImportedNodeInterface(self, i,
                         migrate = False)
                 self._auto_interfaces.append(iface) # keep it referenced!
                 self._interfaces[i] = iface
@@ -161,7 +161,7 @@ class Node(object):
 
     def route(self, tipe = 'unicast', prefix = None, prefix_len = 0,
             nexthop = None, interface = None, metric = 0):
-        return netns.iproute.route(tipe, prefix, prefix_len, nexthop,
+        return nemu.iproute.route(tipe, prefix, prefix_len, nexthop,
                 interface.index if interface else None, metric)
 
     def add_route(self, *args, **kwargs):
@@ -197,7 +197,7 @@ def _start_child(nonetns):
     # FIXME: clean up signal handers, atexit functions, etc.
     try:
         s0.close()
-        srv = netns.protocol.Server(s1, s1)
+        srv = nemu.protocol.Server(s1, s1)
         if not nonetns:
             # create new name space
             unshare.unshare(unshare.CLONE_NEWNET)
@@ -222,4 +222,4 @@ def _start_child(nonetns):
     # NOTREACHED
 
 get_nodes = Node.get_nodes
-import_if = netns.interface.ImportedInterface
+import_if = nemu.interface.ImportedInterface

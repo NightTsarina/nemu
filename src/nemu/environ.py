@@ -147,7 +147,7 @@ def log_use_syslog(use = True, ident = None, logopt = 0,
         return
     if not ident:
         #ident = os.path.basename(sys.argv[0])
-        ident = "netns"
+        ident = "nemu"
     syslog.openlog("%s[%d]" % (ident, os.getpid()), logopt, facility)
     _log_syslog_opts = (ident, logopt, facility)
     _log_use_syslog = True
