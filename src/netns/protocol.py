@@ -1,3 +1,4 @@
+# vim:ts=4:sw=4:et:ai:sts=4
 import base64, errno, os, passfd, re, select, signal, socket, sys, tempfile
 import time, traceback, unshare
 import netns.subprocess_, netns.iproute

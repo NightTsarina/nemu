@@ -1,3 +1,4 @@
+# vim:ts=4:sw=4:et:ai:sts=4
 import os, pwd
 from netns.node import *
 from netns.interface import *

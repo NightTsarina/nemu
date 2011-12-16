@@ -1,3 +1,4 @@
+# vim:ts=4:sw=4:et:ai:sts=4
 import errno, os, socket, sys, traceback, unshare, weakref
 from netns.environ import *
 import netns.interface, netns.protocol, netns.subprocess_
