@@ -787,16 +787,17 @@ class Client(object):
         if not xinfo:
             raise RuntimeError("Impossible to forward X: DISPLAY variable not "
                     "set or invalid")
+        xauthdpy, sock, addr = xinfo
         if not xauth_path:
             raise RuntimeError("Impossible to forward X: xauth not present")
-        auth = backticks([xauth_path, "list", os.environ["DISPLAY"]])
+        auth = backticks([xauth_path, "list", xauthdpy])
         match = re.match(r"\S+\s+(\S+)\s+(\S+)\n", auth)
         if not match:
             raise RuntimeError("Impossible to forward X: invalid DISPLAY")
         protoname, hexkey = match.groups()
 
         server = self.set_x11(protoname, hexkey)
-        self._forwarder = _spawn_x11_forwarder(server, *xinfo)
+        self._forwarder = _spawn_x11_forwarder(server, sock, addr)
 
 def _b64(text):
     if text == None:
@@ -826,16 +827,23 @@ def _parse_display():
     if "DISPLAY" not in os.environ:
         return None
     dpy = os.environ["DISPLAY"]
-    match = re.search(r"^(.*):(\d+)(?:\.(\d+))$", dpy)
+    match = re.search(r"^(.*):(\d+)(?:\.\d+)?$", dpy)
     if not match:
         return None
-    if match.group(1):
+    host, number = match.groups()
+    if host and host != "unix":
         sock = (socket.AF_INET, socket.SOCK_STREAM, 0)
-        addr = (match.group(1), 6000 + int(match.group(2)))
+        addr = (host, 6000 + int(number))
     else:
         sock = (socket.AF_UNIX, socket.SOCK_STREAM, 0)
-        addr = ("/tmp/.X11-unix/X%d" % int(match.group(2)))
-    return sock, addr
+        addr = ("/tmp/.X11-unix/X%s" % number)
+
+    # Xauth does not work with DISPLAYs of the form localhost:X.
+    if host and host != "localhost":
+        xauthdpy = dpy
+    else:
+        xauthdpy = "unix:%s" % number
+    return xauthdpy, sock, addr
 
 def _spawn_x11_forwarder(server, xsock, xaddr):
     server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
