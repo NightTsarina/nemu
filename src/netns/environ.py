@@ -4,7 +4,7 @@ from syslog import LOG_ERR, LOG_WARNING, LOG_NOTICE, LOG_INFO, LOG_DEBUG
 
 __all__ = ["ip_path", "tc_path", "brctl_path", "sysctl_path", "hz"]
 __all__ += ["tcpdump_path", "netperf_path", "xauth_path", "xdpyinfo_path"]
-__all__ += ["execute", "backticks"]
+__all__ += ["execute", "backticks", "eintr_wrapper"]
 __all__ += ["find_listen_port"]
 __all__ += ["LOG_ERR", "LOG_WARNING", "LOG_NOTICE", "LOG_INFO", "LOG_DEBUG"]
 __all__ += ["set_log_level", "logger"]
@@ -74,6 +74,20 @@ def backticks(cmd):
         raise RuntimeError("Error executing `%s': %s" % (" ".join(cmd), err))
     return out
 
+def eintr_wrapper(f, *args):
+    "Wraps some callable with a loop that retries on EINTR."
+    while True:
+        try:
+            return f(*args)
+        except OSError, e: # pragma: no cover
+            if e.errno == errno.EINTR:
+                continue
+            raise
+        except IOError, e: # pragma: no cover
+            if e.errno == errno.EINTR:
+                continue
+            raise
+
 def find_listen_port(family = socket.AF_INET, type = socket.SOCK_STREAM,
         proto = 0, addr = "127.0.0.1", min_port = 1, max_port = 65535):
     s = socket.socket(family, type, proto)
@@ -133,15 +147,8 @@ def logger(priority, message):
     if priority > _log_level:
         return
 
-    while True:
-        try:
-            _log_stream.write("[%d] %s\n" % (os.getpid(), message.rstrip()))
-        except OSError, e: # pragma: no cover
-            if e.errno == errno.EINTR:
-                continue
-            else:
-                raise
-        break
+    eintr_wrapper(_log_stream.write,
+            "[%d] %s\n" % (os.getpid(), message.rstrip()))
     _log_stream.flush()
 
 def error(message):

@@ -149,8 +149,8 @@ class Server(object):
 
     def readline(self):
         "Read a line from the socket and detect connection break-up."
-        # FIXME: should use the _eintr_wrapper from subprocess: some
-        # reorganization needed first.
+        # FIXME: should use the eintr_wrapper from environ; why was I using
+        # readline instead of read?
         while True:
             try:
                 line = self._rfd.readline()
@@ -552,13 +552,7 @@ class Client(object):
             raise RuntimeError("Client already shut down.")
         text = []
         while True:
-            try:
-                line = self._rfd.readline().rstrip()
-            except IOError, e:
-                if e.errno == errno.EINTR:
-                    continue
-                else:
-                    raise e
+            line = eintr_wrapper(self._rfd.readline).rstrip()
             if not line:
                 raise RuntimeError("Protocol error, empty line received")
 

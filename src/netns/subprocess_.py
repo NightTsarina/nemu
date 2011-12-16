@@ -1,5 +1,6 @@
 # vim:ts=4:sw=4:et:ai:sts=4
-import errno, fcntl, grp, os, pickle, pwd, signal, select, sys, time, traceback
+import fcntl, grp, os, pickle, pwd, signal, select, sys, time, traceback
+from netns.environ import eintr_wrapper
 
 __all__ = [ 'PIPE', 'STDOUT', 'Popen', 'Subprocess', 'spawn', 'wait', 'poll',
         'get_user', 'system', 'backticks', 'backticks_raise' ]
@@ -167,7 +168,7 @@ class Popen(Subprocess):
         # Close pipes, they have been dup()ed to the child
         for k, v in fdmap.items():
             if getattr(self, k) != None:
-                _eintr_wrapper(os.close, v)
+                eintr_wrapper(os.close, v)
 
     def communicate(self, input = None):
         """See Popen.communicate."""
@@ -296,10 +297,10 @@ def spawn(executable, argv = None, cwd = None, env = None, close_fds = False,
                 if userfd[i] != None and userfd[i] >= 0:
                     os.dup2(userfd[i], i)
                     if userfd[i] != i and userfd[i] not in userfd[0:i]:
-                        _eintr_wrapper(os.close, userfd[i]) # only in child!
+                        eintr_wrapper(os.close, userfd[i]) # only in child!
 
             # Set up special control pipe
-            _eintr_wrapper(os.close, r)
+            eintr_wrapper(os.close, r)
             flags = fcntl.fcntl(w, fcntl.F_GETFD)
             fcntl.fcntl(w, fcntl.F_SETFD, flags | fcntl.FD_CLOEXEC)
 
@@ -345,29 +346,29 @@ def spawn(executable, argv = None, cwd = None, env = None, close_fds = False,
                 # subprocess.py
                 v.child_traceback = "".join(
                         traceback.format_exception(t, v, tb))
-                _eintr_wrapper(os.write, w, pickle.dumps(v))
-                _eintr_wrapper(os.close, w)
+                eintr_wrapper(os.write, w, pickle.dumps(v))
+                eintr_wrapper(os.close, w)
                 #traceback.print_exc()
             except:
                 traceback.print_exc()
             os._exit(1)
 
-    _eintr_wrapper(os.close, w)
+    eintr_wrapper(os.close, w)
 
     # read EOF for success, or a string as error info
     s = ""
     while True:
-        s1 = _eintr_wrapper(os.read, r, 4096)
+        s1 = eintr_wrapper(os.read, r, 4096)
         if s1 == "":
             break
         s += s1
-    _eintr_wrapper(os.close, r)
+    eintr_wrapper(os.close, r)
 
     if s == "":
         return pid
 
     # It was an error
-    _eintr_wrapper(os.waitpid, pid, 0)
+    eintr_wrapper(os.waitpid, pid, 0)
     exc = pickle.loads(s)
     # XXX: sys.excepthook
     #print exc.child_traceback
@@ -383,7 +384,7 @@ def poll(pid):
 
 def wait(pid):
     """Wait for process to die and return the exit code."""
-    return _eintr_wrapper(os.waitpid, pid, 0)[1]
+    return eintr_wrapper(os.waitpid, pid, 0)[1]
 
 def get_user(user):
     "Take either an username or an uid, and return a tuple (user, uid, gid)."
@@ -402,17 +403,6 @@ def get_user(user):
     return user, uid, gid
 
 # internal stuff, do not look!
-
-def _eintr_wrapper(f, *args):
-    "Wraps some callable with a loop that retries on EINTR"
-    while True:
-        try:
-            return f(*args)
-        except OSError, e: # pragma: no cover
-            if e.errno == errno.EINTR:
-                continue
-            else:
-                raise
 
 try:
     MAXFD = os.sysconf("SC_OPEN_MAX")

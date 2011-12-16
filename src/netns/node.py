@@ -60,16 +60,7 @@ class Node(object):
         if self._slave:
             self._slave.shutdown()
 
-        while True:
-            try:
-                exitcode = os.waitpid(self._pid, 0)[1]
-            except OSError, e: # pragma: no cover
-                if e.errno == errno.EINTR:
-                    continue
-                else:
-                    raise
-            break
-
+        exitcode = eintr_wrapper(os.waitpid, self._pid, 0)[1]
         if exitcode != 0:
             error("Node(0x%x) process %d exited with non-zero status: %d" %
                     (id(self), self._pid, exitcode))
