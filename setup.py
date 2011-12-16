@@ -7,9 +7,8 @@ from distutils.core import setup, Extension, Command
 setup(
         name        = 'nemu',
         version     = '0.1',
-        description = '''A framework for creating emulated networks in a
-        single host and run experiments on them''',
-#        long_description = longdesc,
+        description = '''A lightweight network emulator embedded in a small
+                      python library.'''
         author      = 'Martín Ferrari',
         author_email = 'martin.ferrari@gmail.com',
         url         = 'http://code.google.com/p/nemu/',
