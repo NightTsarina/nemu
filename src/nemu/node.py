@@ -195,7 +195,8 @@ def _start_child(nonetns):
         return (s0, pid)
 
     # FIXME: clean up signal handers, atexit functions, etc.
-    try:
+    try: # pragma: no cover
+        # coverage doesn't seem to understand fork
         s0.close()
         srv = nemu.protocol.Server(s1, s1)
         if not nonetns:
@@ -218,7 +219,7 @@ def _start_child(nonetns):
             pass
         os._exit(1)
 
-    os._exit(0)
+    os._exit(0) # pragma: no cover
     # NOTREACHED
 
 get_nodes = Node.get_nodes
