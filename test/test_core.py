@@ -121,10 +121,44 @@ class TestGlobal(unittest.TestCase):
         self.assertEquals(a1.wait(), 0)
         self.assertEquals(a2.wait(), 0)
 
+    def _forward_packets(self, subproc, if1, if2):
+        while(True):
+            ready = select.select([if1.fd, if2.fd], [], [], 0.1)[0]
+            if ready:
+                s = os.read(ready[0], 65536)
+                if ready[0] == if1.fd:
+                    os.write(if2.fd, s)
+                else:
+                    os.write(if1.fd, s)
+                if not s:
+                    break
+            if subproc.poll() != None:
+                break
+
+    @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
+    def test_run_ping_tun(self):
+        """This test simulates a point to point connection between two hosts
+        using two tun devices."""
+        n1 = nemu.Node()
+        n2 = nemu.Node()
+
+        # Use PI, so that's tested too.
+        tun1 = n1.add_tun(use_pi = True)
+        tun2 = n2.add_tun(use_pi = True)
+        tun1.up = tun2.up = True
+
+        tun1.add_v4_address('10.0.1.1', 24)
+        tun2.add_v4_address('10.0.1.2', 24)
+
+        null = file('/dev/null', 'wb')
+        a = n1.Popen(['ping', '-qc1', '10.0.1.2'], stdout = null)
+        self._forward_packets(a, tun1, tun2)
+        self.assertEquals(a.wait(), 0)
+
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_run_ping_tap(self):
         """This test simulates a point to point connection between two hosts
-        using two tap devices"""
+        using two tap devices."""
         n1 = nemu.Node()
         n2 = nemu.Node()
 
@@ -134,34 +168,22 @@ class TestGlobal(unittest.TestCase):
 
         tap1.add_v4_address('10.0.1.1', 24)
         tap2.add_v4_address('10.0.1.2', 24)
-        
+
         null = file('/dev/null', 'wb')
         a = n1.Popen(['ping', '-qc1', '10.0.1.2'], stdout = null)
-        
-        while(True):
-            ready = select.select([tap1.fd, tap2.fd], [], [], 0.1)[0]
-            if ready:
-                s = os.read(ready[0], 65536)
-                if ready[0] == tap1.fd:
-                    os.write(tap2.fd, s)
-                else:
-                    os.write(tap1.fd, s)
-                if not s:
-                    break
-            if a.poll() != None:
-                break
-
+        self._forward_packets(a, tap1, tap2)
         self.assertEquals(a.wait(), 0)
 
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_run_ping_tap_routing(self):
         """This test simulates a point to point connection between two hosts
-        using two tap devices"""
+        using two tap devices, and normal connections with other two, to use
+        routing."""
         n1 = nemu.Node()
         n2 = nemu.Node()
         n3 = nemu.Node()
         n4 = nemu.Node()
- 
+
         i1 = n1.add_if()
         i2 = n2.add_if()
         tap1 = n2.add_tap()
@@ -197,20 +219,7 @@ class TestGlobal(unittest.TestCase):
 
         null = file('/dev/null', 'wb')
         a = n1.Popen(['ping', '-qc1', '10.0.2.2'], stdout = null)
-        
-        while(True):
-            ready = select.select([tap1.fd, tap2.fd], [], [], 0.1)[0]
-            if ready:
-                s = os.read(ready[0], 65536)
-                if ready[0] == tap1.fd:
-                    os.write(tap2.fd, s)
-                else:
-                    os.write(tap1.fd, s)
-                if not s:
-                    break
-            if a.poll() != None:
-                break
-
+        self._forward_packets(a, tap1, tap2)
         self.assertEquals(a.wait(), 0)
 
 class TestX11(unittest.TestCase):
