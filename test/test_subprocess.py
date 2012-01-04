@@ -109,6 +109,16 @@ class TestSubprocess(unittest.TestCase):
         self.assertEquals(_readall(r), "hello world\n")
         os.close(r)
 
+        # Check poll.
+        while True:
+            ret = sp.poll(p)
+            if ret is not None:
+                self.assertEquals(ret, 0)
+                break
+            time.sleep(0.2)  # Wait a little bit.
+        # It cannot be wait()ed again.
+        self.assertRaises(OSError, sp.wait, p)
+
         r0, w0 = os.pipe()
         r1, w1 = os.pipe()
         p = sp.spawn('/bin/cat', stdout = w0, stdin = r1, close_fds = [r0, w1])
