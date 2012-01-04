@@ -19,6 +19,67 @@ class TestUtils(unittest.TestCase):
             'broadcast': None, 'family': 'inet'
             } in devs['lo']['addr'])
 
+class TestIPRouteStuff(unittest.TestCase):
+    def test_fix_lladdr(self):
+        fl = nemu.iproute._fix_lladdr
+        self.assertEquals(fl('42:71:e0:90:ca:42'), '42:71:e0:90:ca:42')
+        self.assertEquals(fl('4271E090CA42'), '42:71:e0:90:ca:42',
+                'Normalization of link-level address: missing colons and '
+                'upper caps')
+        self.assertEquals(fl('2:71:E:90:CA:42'), '02:71:0e:90:ca:42',
+                'Normalization of link-level address: missing zeroes')
+        self.assertEquals(fl('271E090CA42'), '02:71:e0:90:ca:42',
+                'Automatic normalization of link-level address: missing '
+                'colons and zeroes')
+        self.assertRaises(ValueError, fl, 'foo')
+        self.assertRaises(ValueError, fl, '42:71:e0:90:ca42')
+        self.assertRaises(ValueError, fl, '1234567890123')
+ 
+    def test_any_to_bool(self):
+        a2b = nemu.iproute._any_to_bool
+        self.assertTrue(a2b(True))
+        self.assertTrue(a2b(2))
+        self.assertTrue(a2b('trUe'))
+        self.assertTrue(a2b('1'))
+        self.assertTrue(a2b('foo'))
+        self.assertTrue(a2b(1.0))
+        self.assertTrue(a2b([1]))
+        self.assertFalse(a2b(False))
+        self.assertFalse(a2b(0))
+        self.assertFalse(a2b('falsE'))
+        self.assertFalse(a2b('0'))
+        self.assertFalse(a2b(''))
+        self.assertFalse(a2b(0.0))
+        self.assertFalse(a2b([]))
+
+    def test_non_empty_str(self):
+        nes = nemu.iproute._non_empty_str
+        self.assertEquals(nes(''), None)
+        self.assertEquals(nes('Foo'), 'Foo')
+        self.assertEquals(nes(1), '1')
+
+    def test_interface(self):
+        i = nemu.iproute.interface(index = 1)
+        self.assertRaises(AttributeError, setattr, i, 'index', 2)
+        self.assertRaises(ValueError, setattr, i, 'mtu', -1)
+        self.assertEquals(repr(i), 'nemu.iproute.interface(index = 1, '
+                'name = None, up = None, mtu = None, lladdr = None, '
+                'broadcast = None, multicast = None, arp = None)')
+        i.name = 'foo'; i.up = 1; i.arp = True; i.mtu = 1500
+        self.assertEquals(repr(i), 'nemu.iproute.interface(index = 1, '
+                'name = \'foo\', up = True, mtu = 1500, lladdr = None, '
+                'broadcast = None, multicast = None, arp = True)')
+        j = nemu.iproute.interface(index = 2)
+        j.name = 'bar'; j.up = False; j.arp = 1
+        # Modifications to turn j into i.
+        self.assertEquals(repr(i - j), 'nemu.iproute.interface(index = 1, '
+                'name = \'foo\', up = True, mtu = 1500, lladdr = None, '
+                'broadcast = None, multicast = None, arp = None)')
+        # Modifications to turn i into j.
+        self.assertEquals(repr(j - i), 'nemu.iproute.interface(index = 2, '
+                'name = \'bar\', up = False, mtu = None, lladdr = None, '
+                'broadcast = None, multicast = None, arp = None)')
+
 class TestInterfaces(unittest.TestCase):
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     def test_interface_creation(self):
