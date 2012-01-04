@@ -15,7 +15,13 @@ class TestConfigure(unittest.TestCase):
         self.assertRaises(AttributeError, setattr, nemu.config,
                 'run_as', 'foobarbaz') # hope nobody has this user!
         self.assertRaises(AttributeError, setattr, nemu.config,
-                'run_as', -1)
+                'run_as', 65536)
+        try:
+            pwd.getpwnam('nobody')
+            nemu.config.run_as('nobody')
+            self.assertEquals(nemu.config.run_as, 'nobody')
+        except:
+            pass
 
 class TestGlobal(unittest.TestCase):
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
