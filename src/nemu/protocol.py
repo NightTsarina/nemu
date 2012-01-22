@@ -115,26 +115,26 @@ class Server(object):
                 # -PID to kill to whole process group
                 os.kill(-pid, signal.SIGTERM)
             now = time.time()
-            ch = set(self._children)
             while time.time() - now < KILL_WAIT:
+                ch = set(self._children)
                 for pid in ch:
                     try:
                        if nemu.subprocess_.poll(pid):
-                           ch.remove(pid)
+                           self._children.remove(pid)
                     except OSError, e:
                         if e.errno == errno.ECHILD:
-                           ch.remove(pid)
+                           self._children.remove(pid)
                         else:
                             raise
                 if not ch:
                     break
                 time.sleep(0.1)
 
-            for pid in ch:
+            for pid in self._children:
                 warning("Killing forcefully process %d." % pid)
                 # -PID to kill to whole process group
                 os.kill(-pid, signal.SIGKILL)
-            for pid in ch:
+            for pid in self._children:
                 try:
                     nemu.subprocess_.poll(pid)
                 except OSError, e:

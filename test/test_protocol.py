@@ -43,6 +43,27 @@ class TestServer(unittest.TestCase):
         s2.close()
         t.join()
 
+    def test_server_clean(self):
+        (s0, s1) = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM, 0)
+
+        def run_server():
+            nemu.protocol.Server(s0, s0).run()
+        t = threading.Thread(target = run_server)
+        t.start()
+
+        cli = nemu.protocol.Client(s1, s1)
+        null = file('/dev/null', 'wb')
+        argv = [ '/bin/sh', '-c', 'yes' ] 
+        pid = cli.spawn(argv, stdout = null)
+        self.assertTrue(os.path.exists("/proc/%d" % pid))
+        # try to exit while there are still processes running
+        cli.shutdown()
+        t.join()
+        # Check that the process was killed. 
+        # We are asumming that the pid is not going to be reused fast enough
+        # to generate a false possitive.
+        self.assertFalse(os.path.exists("/proc/%d" % pid))
+
     def test_spawn_recovery(self):
         (s0, s1) = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM, 0)
 
