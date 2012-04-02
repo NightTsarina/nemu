@@ -17,20 +17,30 @@
 # You should have received a copy of the GNU General Public License along with
 # Nemu.  If not, see <http://www.gnu.org/licenses/>.
 
+"""Nemu package.
+
+Nemu (Netwok EMUlator) is a small Python library to create emulated networks
+and run and test programs in them.
+"""
+
+# pylint: disable=W0401,R0903
 import os, pwd
 from nemu.node import *
 from nemu.interface import *
 
-class __Config(object):
+class _Config(object):
+    """Global configuration singleton for Nemu."""
+
     def __init__(self):
         self._run_as = 65534
         try:
             pwd.getpwnam('nobody')
             self._run_as = 'nobody'
-        except:
-            pass
+        except KeyError:
+            pass  # User not found.
 
     def _set_run_as(self, user):
+        """Setter for `run_as'."""
         if str(user).isdigit():
             uid = int(user)
             try:
@@ -48,18 +58,20 @@ class __Config(object):
             raise AttributeError("Cannot run as root by default")
         self._run_as = run_as
         return run_as
+
     def _get_run_as(self):
+        """Setter for `run_as'."""
         return self._run_as
+
     run_as = property(_get_run_as, _set_run_as, None,
             "Default user to run applications as")
 
-config = __Config()
+config = _Config()  # pylint: disable=C0103
 
 
 # FIXME: set atfork hooks
 # http://code.google.com/p/python-atfork/source/browse/atfork/__init__.py
 
-def set_cleanup_hooks(on_exit = False, on_signals = []):
-    pass
-
+#def set_cleanup_hooks(on_exit = False, on_signals = []):
+#    pass
 
