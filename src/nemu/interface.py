@@ -71,7 +71,7 @@ class NSInterface(Interface):
         # Disable auto-configuration
         # you wish: need to take into account the nonetns mode; plus not
         # touching some pre-existing ifaces
-        #node.system([sysctl_path, '-w', 'net.ipv6.conf.%s.autoconf=0' %
+        #node.system([SYSCTL_PATH, '-w', 'net.ipv6.conf.%s.autoconf=0' %
         #self.name])
         node._add_interface(self)
 

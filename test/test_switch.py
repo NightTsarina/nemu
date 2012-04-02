@@ -50,7 +50,7 @@ class TestSwitch(unittest.TestCase):
         # Test strange rules handling
         os.system(("%s qd add dev %s root prio bands 3 " +
             "priomap 1 2 2 2 1 2 0 0 1 1 1 1 1 1 1 1") %
-            (nemu.environ.tc_path, i1.control.name))
+            (nemu.environ.TC_PATH, i1.control.name))
         tcdata = nemu.iproute.get_tc_data()[0]
         self.assertEquals(tcdata[i1.control.index], "foreign")
         l.set_parameters(bandwidth = 13107200) # 100 mbits

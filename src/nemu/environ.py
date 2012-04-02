@@ -20,54 +20,54 @@
 import errno, os, os.path, socket, subprocess, sys, syslog
 from syslog import LOG_ERR, LOG_WARNING, LOG_NOTICE, LOG_INFO, LOG_DEBUG
 
-__all__ = ["ip_path", "tc_path", "brctl_path", "sysctl_path", "hz"]
-__all__ += ["tcpdump_path", "netperf_path", "xauth_path", "xdpyinfo_path"]
+
+__all__ = ["IP_PATH", "TC_PATH", "BRCTL_PATH", "SYSCTL_PATH", "HZ"]
+__all__ += ["TCPDUMP_PATH", "NETPERF_PATH", "XAUTH_PATH", "XDPYINFO_PATH"]
 __all__ += ["execute", "backticks", "eintr_wrapper"]
 __all__ += ["find_listen_port"]
 __all__ += ["LOG_ERR", "LOG_WARNING", "LOG_NOTICE", "LOG_INFO", "LOG_DEBUG"]
 __all__ += ["set_log_level", "logger"]
 __all__ += ["error", "warning", "notice", "info", "debug"]
 
+
 def find_bin(name, extra_path = None):
+    """Try hard to find the location of needed programs."""
     search = []
     if "PATH" in os.environ:
         search += os.environ["PATH"].split(":")
-    for pref in ("/", "/usr/", "/usr/local/"):
-        for d in ("bin", "sbin"):
-            search.append(pref + d)
+    search.extend(os.path.join(x, y)
+            for x in ("/", "/usr/", "/usr/local/")
+            for y in ("bin", "sbin"))
     if extra_path:
         search += extra_path
 
-    for d in search:
-            try:
-                os.stat(d + "/" + name)
-                return d + "/" + name
-            except OSError, e:
-                if e.errno != os.errno.ENOENT:
-                    raise
+    for dirr in search:
+        path = os.path.join(dirr, name)
+        if os.path.exists(path):
+            return path
     return None
 
 def find_bin_or_die(name, extra_path = None):
-    r = find_bin(name)
-    if not r:
-        raise RuntimeError(("Cannot find `%s' command, impossible to " +
-                "continue.") % name)
-    return r
+    """Try hard to find the location of needed programs; raise on failure."""
+    res = find_bin(name, extra_path)
+    if not res:
+        raise RuntimeError("Cannot find `%s', impossible to continue." % name)
+    return res
 
-ip_path     = find_bin_or_die("ip")
-tc_path     = find_bin_or_die("tc")
-brctl_path  = find_bin_or_die("brctl")
-sysctl_path = find_bin_or_die("sysctl")
+IP_PATH     = find_bin_or_die("ip")
+TC_PATH     = find_bin_or_die("tc")
+BRCTL_PATH  = find_bin_or_die("brctl")
+SYSCTL_PATH = find_bin_or_die("sysctl")
 
 # Optional tools
-tcpdump_path = find_bin("tcpdump")
-netperf_path = find_bin("netperf")
-xauth_path = find_bin("xauth")
-xdpyinfo_path = find_bin("xdpyinfo")
+TCPDUMP_PATH = find_bin("tcpdump")
+NETPERF_PATH = find_bin("netperf")
+XAUTH_PATH = find_bin("xauth")
+XDPYINFO_PATH = find_bin("xdpyinfo")
 
 # Seems this is completely bogus. At least, we can assume that the internal HZ
 # is bigger than this.
-hz = os.sysconf("SC_CLK_TCK")
+HZ = os.sysconf("SC_CLK_TCK")
 
 try:
     os.stat("/sys/class/net")
@@ -76,43 +76,56 @@ except:
             "continue.")
 
 def execute(cmd):
+    """Execute a command, if the return value is non-zero, raise an exception.
+    
+    Raises:
+        RuntimeError: the command was unsuccessful (return code != 0).
+    """
     debug("execute(%s)" % cmd)
     null = open("/dev/null", "r+")
-    p = subprocess.Popen(cmd, stdout = null, stderr = subprocess.PIPE)
-    out, err = p.communicate()
-    if p.returncode != 0:
+    proc = subprocess.Popen(cmd, stdout = null, stderr = subprocess.PIPE)
+    _, err = proc.communicate()
+    if proc.returncode != 0:
         raise RuntimeError("Error executing `%s': %s" % (" ".join(cmd), err))
 
 def backticks(cmd):
+    """Execute a command and capture its output.
+    If the return value is non-zero, raise an exception.
+   
+    Returns:
+        (stdout, stderr): tuple containing the captured output.
+    Raises:
+        RuntimeError: the command was unsuccessful (return code != 0).
+    """
     debug("backticks(%s)" % cmd)
-    p = subprocess.Popen(cmd, stdout = subprocess.PIPE,
+    proc = subprocess.Popen(cmd, stdout = subprocess.PIPE,
             stderr = subprocess.PIPE)
-    out, err = p.communicate()
-    if p.returncode != 0:
+    out, err = proc.communicate()
+    if proc.returncode != 0:
         raise RuntimeError("Error executing `%s': %s" % (" ".join(cmd), err))
     return out
 
-def eintr_wrapper(f, *args):
+def eintr_wrapper(func, *args):
     "Wraps some callable with a loop that retries on EINTR."
     while True:
         try:
-            return f(*args)
-        except OSError, e: # pragma: no cover
-            if e.errno == errno.EINTR:
+            return func(*args)
+        except OSError, ex: # pragma: no cover
+            if ex.errno == errno.EINTR:
                 continue
             raise
-        except IOError, e: # pragma: no cover
-            if e.errno == errno.EINTR:
+        except IOError, ex: # pragma: no cover
+            if ex.errno == errno.EINTR:
                 continue
             raise
 
 def find_listen_port(family = socket.AF_INET, type = socket.SOCK_STREAM,
         proto = 0, addr = "127.0.0.1", min_port = 1, max_port = 65535):
-    s = socket.socket(family, type, proto)
-    for p in range(min_port, max_port + 1):
+    sock = socket.socket(family, type, proto)
+    for port in range(min_port, max_port + 1):
         try:
-            s.bind((addr, p))
-            return s, p
+            sock.bind((addr, port))
+            return sock, port
         except socket.error:
             pass
     raise RuntimeError("Cannot find an usable port in the range specified")
@@ -130,36 +143,36 @@ def set_log_level(level):
     assert level > LOG_ERR and level <= LOG_DEBUG
     _log_level = level
 
-def set_log_output(file):
+def set_log_output(stream):
     "Redirect console messages to the provided stream."
     global _log_stream
-    assert hasattr(file, "write") and hasattr(file, "flush")
-    _log_stream = file
+    assert hasattr(stream, "write") and hasattr(stream, "flush")
+    _log_stream = stream
 
 def log_use_syslog(use = True, ident = None, logopt = 0,
         facility = syslog.LOG_USER):
     "Enable or disable the use of syslog for logging messages."
     global _log_use_syslog, _log_syslog_opts
-    if not use:
-        if _log_use_syslog:
-            syslog.closelog()
-        _log_use_syslog = False
+    _log_syslog_opts = (ident, logopt, facility)
+    _log_use_syslog = use
+    _init_log()
+
+def _init_log():
+    if not _log_use_syslog:
+        syslog.closelog()
         return
+    (ident, logopt, facility) = _log_syslog_opts 
     if not ident:
         #ident = os.path.basename(sys.argv[0])
         ident = "nemu"
     syslog.openlog("%s[%d]" % (ident, os.getpid()), logopt, facility)
-    _log_syslog_opts = (ident, logopt, facility)
-    _log_use_syslog = True
     info("Syslog logging started")
 
 def logger(priority, message):
     "Print a log message in syslog, console or both."
-    global _log_use_syslog, _log_stream
     if _log_use_syslog:
         if os.getpid() != _log_pid:
-            # Re-init logging
-            log_use_syslog(_log_use_syslog, *_log_syslog_opts)
+            _init_log()  # Need to tell syslog the new PID.
         syslog.syslog(priority, message)
         return
     if priority > _log_level:
@@ -180,14 +193,13 @@ def info(message):
 def debug(message):
     logger(LOG_DEBUG, message)
 
-# Used to print extra info in nested exceptions
-def _custom_hook(t, v, tb): # pragma: no cover
-    if hasattr(v, "child_traceback"):
+def _custom_hook(tipe, value, traceback): # pragma: no cover
+    """Custom exception hook, to print nested exceptions information."""
+    if hasattr(value, "child_traceback"):
         sys.stderr.write("Nested exception, original traceback " +
                 "(most recent call last):\n")
-        sys.stderr.write(v.child_traceback + ("-" * 70) + "\n")
-    sys.__excepthook__(t, v, tb)
+        sys.stderr.write(value.child_traceback + ("-" * 70) + "\n")
+    sys.__excepthook__(tipe, value, traceback)
 
-# XXX: somebody kill me, I deserve it :)
 sys.excepthook = _custom_hook
 

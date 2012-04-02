@@ -230,9 +230,9 @@ class TestGlobal(unittest.TestCase):
 
 class TestX11(unittest.TestCase):
     @test_util.skipUnless("DISPLAY" in os.environ, "Test requires working X11")
-    @test_util.skipUnless(nemu.environ.xdpyinfo_path, "Test requires xdpyinfo")
+    @test_util.skipUnless(nemu.environ.XDPYINFO_PATH, "Test requires xdpyinfo")
     def test_run_xdpyinfo(self):
-        xdpy = nemu.environ.xdpyinfo_path
+        xdpy = nemu.environ.XDPYINFO_PATH
         info = nemu.environ.backticks([xdpy])
         # remove first line, contains the display name
         info = info.partition("\n")[2]
@@ -243,9 +243,9 @@ class TestX11(unittest.TestCase):
 
     @test_util.skipUnless(os.getuid() == 0, "Test requires root privileges")
     @test_util.skipUnless("DISPLAY" in os.environ, "Test requires working X11")
-    @test_util.skipUnless(nemu.environ.xdpyinfo_path, "Test requires xdpyinfo")
+    @test_util.skipUnless(nemu.environ.XDPYINFO_PATH, "Test requires xdpyinfo")
     def test_run_xdpyinfo_netns(self):
-        xdpy = nemu.environ.xdpyinfo_path
+        xdpy = nemu.environ.XDPYINFO_PATH
         info = nemu.environ.backticks([xdpy])
         # remove first line, contains the display name
         info = info.partition("\n")[2]

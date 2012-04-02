@@ -364,7 +364,7 @@ class Server(object):
                 os.close(fd)
                 # stupid xauth format: needs the 'hostname' for local
                 # connections
-                execute([xauth_path, "-f", xauth, "add",
+                execute([XAUTH_PATH, "-f", xauth, "add",
                     "%s/unix:%d" % (socket.gethostname(), display),
                     protoname, hexkey])
                 if user:
@@ -506,7 +506,7 @@ class Server(object):
         self.reply(200, "Done.")
 
     def do_X11_SET(self, cmdname, protoname, hexkey):
-        if not xauth_path:
+        if not XAUTH_PATH:
             self.reply(500, "Impossible to forward X: xauth not present")
             return
         skt, port = None, None
@@ -788,9 +788,9 @@ class Client(object):
             raise RuntimeError("Impossible to forward X: DISPLAY variable not "
                     "set or invalid")
         xauthdpy, sock, addr = xinfo
-        if not xauth_path:
+        if not XAUTH_PATH:
             raise RuntimeError("Impossible to forward X: xauth not present")
-        auth = backticks([xauth_path, "list", xauthdpy])
+        auth = backticks([XAUTH_PATH, "list", xauthdpy])
         match = re.match(r"\S+\s+(\S+)\s+(\S+)\n", auth)
         if not match:
             raise RuntimeError("Impossible to forward X: invalid DISPLAY")

@@ -54,11 +54,11 @@ def process_ipcmd(str):
     return out
 
 def get_devs():
-    outdata = backticks([ip_path, "addr", "list"])
+    outdata = backticks([IP_PATH, "addr", "list"])
     return process_ipcmd(outdata)
 
 def get_devs_netns(node):
-    out = nemu.subprocess_.backticks_raise(node, [ip_path, "addr", "list"])
+    out = nemu.subprocess_.backticks_raise(node, [IP_PATH, "addr", "list"])
     return process_ipcmd(out)
 
 def make_linux_ver(string):

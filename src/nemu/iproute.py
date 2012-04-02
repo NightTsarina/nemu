@@ -299,7 +299,7 @@ def get_if_data():
 
     In each dictionary, values are interface objects.
     """
-    ipdata = backticks([ip_path, "-o", "link", "list"])
+    ipdata = backticks([IP_PATH, "-o", "link", "list"])
 
     byidx = {}
     bynam = {}
@@ -348,7 +348,7 @@ def create_if_pair(if1, if2):
         if iface[i].mtu:
             cmd[i] += ["mtu", str(iface[i].mtu)]
 
-    cmd = [ip_path, "link", "add"] + cmd[0] + ["type", "veth", "peer"] + cmd[1]
+    cmd = [IP_PATH, "link", "add"] + cmd[0] + ["type", "veth", "peer"] + cmd[1]
     execute(cmd)
     try:
         set_if(if1)
@@ -366,7 +366,7 @@ def create_if_pair(if1, if2):
 
 def del_if(iface):
     ifname = _get_if_name(iface)
-    execute([ip_path, "link", "del", ifname])
+    execute([IP_PATH, "link", "del", ifname])
 
 def set_if(iface, recover = True):
     def do_cmds(cmds, orig_iface):
@@ -383,7 +383,7 @@ def set_if(iface, recover = True):
 
     # Name goes first
     if diff.name:
-        _ils = [ip_path, "link", "set", "dev"]
+        _ils = [IP_PATH, "link", "set", "dev"]
         cmds = [_ils + [orig_iface.name, "name", diff.name]]
         if orig_iface.up:
             # iface needs to be down
@@ -392,7 +392,7 @@ def set_if(iface, recover = True):
         do_cmds(cmds, orig_iface)
 
     # I need to use the new name after a name change, duh!
-    _ils = [ip_path, "link", "set", "dev", diff.name or orig_iface.name]
+    _ils = [IP_PATH, "link", "set", "dev", diff.name or orig_iface.name]
     cmds = []
     if diff.lladdr:
         if orig_iface.up:
@@ -417,12 +417,12 @@ def set_if(iface, recover = True):
 
 def change_netns(iface, netns):
     ifname = _get_if_name(iface)
-    execute([ip_path, "link", "set", "dev", ifname, "netns", str(netns)])
+    execute([IP_PATH, "link", "set", "dev", ifname, "netns", str(netns)])
 
 # Address handling
 
 def get_addr_data():
-    ipdata = backticks([ip_path, "-o", "addr", "list"])
+    ipdata = backticks([IP_PATH, "-o", "addr", "list"])
 
     byidx = {}
     bynam = {}
@@ -461,7 +461,7 @@ def add_addr(iface, address):
     addresses = get_addr_data()[1][ifname]
     assert address not in addresses
 
-    cmd = [ip_path, "addr", "add", "dev", ifname, "local",
+    cmd = [IP_PATH, "addr", "add", "dev", ifname, "local",
             "%s/%d" % (address.address, int(address.prefix_len))]
     if hasattr(address, "broadcast"):
         cmd += ["broadcast", address.broadcast if address.broadcast else "+"]
@@ -472,7 +472,7 @@ def del_addr(iface, address):
     addresses = get_addr_data()[1][ifname]
     assert address in addresses
 
-    cmd = [ip_path, "addr", "del", "dev", ifname, "local",
+    cmd = [IP_PATH, "addr", "del", "dev", ifname, "local",
             "%s/%d" % (address.address, int(address.prefix_len))]
     execute(cmd)
 
@@ -546,7 +546,7 @@ def create_bridge(br):
     if isinstance(br, str):
         br = interface(name = br)
     assert br.name
-    execute([brctl_path, "addbr", br.name])
+    execute([BRCTL_PATH, "addbr", br.name])
     try:
         set_if(br)
     except:
@@ -560,7 +560,7 @@ def create_bridge(br):
 
 def del_bridge(br):
     brname = _get_if_name(br)
-    execute([brctl_path, "delbr", brname])
+    execute([BRCTL_PATH, "delbr", brname])
 
 def set_bridge(br, recover = True):
     def saveval(fname, val):
@@ -599,18 +599,18 @@ def set_bridge(br, recover = True):
 def add_bridge_port(br, iface):
     ifname = _get_if_name(iface)
     brname = _get_if_name(br)
-    execute([brctl_path, "addif", brname, ifname])
+    execute([BRCTL_PATH, "addif", brname, ifname])
 
 def del_bridge_port(br, iface):
     ifname = _get_if_name(iface)
     brname = _get_if_name(br)
-    execute([brctl_path, "delif", brname, ifname])
+    execute([BRCTL_PATH, "delif", brname, ifname])
 
 # Routing
 
 def get_all_route_data():
-    ipdata = backticks([ip_path, "-o", "route", "list"]) # "table", "all"
-    ipdata += backticks([ip_path, "-o", "-f", "inet6", "route", "list"])
+    ipdata = backticks([IP_PATH, "-o", "route", "list"]) # "table", "all"
+    ipdata += backticks([IP_PATH, "-o", "-f", "inet6", "route", "list"])
 
     ifdata = get_if_data()[1]
     ret = []
@@ -655,7 +655,7 @@ def del_route(route):
     _add_del_route("del", route)
 
 def _add_del_route(action, route):
-    cmd = [ip_path, "route", action]
+    cmd = [IP_PATH, "route", action]
     if route.tipe != "unicast":
         cmd += [route.tipe]
     if route.prefix:
@@ -671,7 +671,7 @@ def _add_del_route(action, route):
 # TC stuff
 
 def get_tc_tree():
-    tcdata = backticks([tc_path, "qdisc", "show"])
+    tcdata = backticks([TC_PATH, "qdisc", "show"])
 
     data = {}
     for line in tcdata.split("\n"):
@@ -827,7 +827,7 @@ def clear_tc(iface):
     if tcdata[iface.index] == None:
         return
     # Any other case, we clean
-    execute([tc_path, "qdisc", "del", "dev", iface.name, "root"])
+    execute([TC_PATH, "qdisc", "del", "dev", iface.name, "root"])
 
 def set_tc(iface, bandwidth = None, delay = None, delay_jitter = None,
         delay_correlation = None, delay_distribution = None,
@@ -843,7 +843,7 @@ def set_tc(iface, bandwidth = None, delay = None, delay_jitter = None,
     commands = []
     if tcdata[iface.index] == 'foreign':
         # Avoid the overhead of calling tc+ip again
-        commands.append([tc_path, "qdisc", "del", "dev", iface.name, "root"])
+        commands.append([TC_PATH, "qdisc", "del", "dev", iface.name, "root"])
         tcdata[iface.index] = {'qdiscs':  []}
 
     has_netem = 'netem' in tcdata[iface.index]['qdiscs']
@@ -859,19 +859,19 @@ def set_tc(iface, bandwidth = None, delay = None, delay_jitter = None,
     else:
         # Too much work to do better :)
         if has_netem or has_tbf:
-            commands.append([tc_path, "qdisc", "del", "dev", iface.name,
+            commands.append([TC_PATH, "qdisc", "del", "dev", iface.name,
                 "root"])
         cmd = "add"
 
     if bandwidth:
         rate = "%dbit" % int(bandwidth)
         mtu = ifdata[iface.index].mtu
-        burst = max(mtu, int(bandwidth) / hz)
+        burst = max(mtu, int(bandwidth) / HZ)
         limit = burst * 2 # FIXME?
         handle = "1:"
         if cmd == "change":
             handle = "%d:" % int(tcdata[iface.index]["qdiscs"]["tbf"])
-        command = [tc_path, "qdisc", cmd, "dev", iface.name, "root", "handle",
+        command = [TC_PATH, "qdisc", cmd, "dev", iface.name, "root", "handle",
                 handle, "tbf", "rate", rate, "limit", str(limit), "burst",
                 str(burst)]
         commands.append(command)
@@ -880,7 +880,7 @@ def set_tc(iface, bandwidth = None, delay = None, delay_jitter = None,
         handle = "2:"
         if cmd == "change":
             handle = "%d:" % int(tcdata[iface.index]["qdiscs"]["netem"])
-        command = [tc_path, "qdisc", cmd, "dev", iface.name, "handle", handle]
+        command = [TC_PATH, "qdisc", cmd, "dev", iface.name, "handle", handle]
         if bandwidth:
             parent = "1:"
             if cmd == "change":

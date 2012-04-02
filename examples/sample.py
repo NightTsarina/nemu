@@ -56,7 +56,7 @@ print "Connectivity IPv4 OK!"
 
 if X:
     app1 = node1.Popen("%s -geometry -0+0 -e %s -ni %s" %
-            (xterm, nemu.environ.tcpdump_path, if1b.name), shell = True)
+            (xterm, nemu.environ.TCPDUMP_PATH, if1b.name), shell = True)
     time.sleep(3)
     app0 = node0.Popen("%s -geometry +0+0 -e ping -c 10 10.0.1.2" % xterm,
             shell = True)

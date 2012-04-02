@@ -51,7 +51,8 @@ class TestNode(unittest.TestCase):
         orig_devs = len(test_util.get_devs())
         chld = os.fork()
         if chld == 0:
-            nemu.set_cleanup_hooks(on_exit = True, on_signals = [])
+            # TODO: not implemented.
+            #nemu.set_cleanup_hooks(on_exit = True, on_signals = [])
             create_stuff()
             os._exit(0)
         os.waitpid(chld, 0)
@@ -61,8 +62,9 @@ class TestNode(unittest.TestCase):
         orig_devs = len(test_util.get_devs())
         chld = os.fork()
         if chld == 0:
-            nemu.set_cleanup_hooks(on_exit = False,
-                    on_signals = [signal.SIGTERM])
+            # TODO: not implemented.
+            #nemu.set_cleanup_hooks(on_exit = False,
+            #        on_signals = [signal.SIGTERM])
             create_stuff()
             while True:
                 time.sleep(10)

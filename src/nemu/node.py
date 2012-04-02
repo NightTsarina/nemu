@@ -203,8 +203,8 @@ def _start_child(nonetns):
             # create new name space
             unshare.unshare(unshare.CLONE_NEWNET)
             # Enable packet forwarding
-            execute([sysctl_path, '-w', 'net.ipv4.ip_forward=1'])
-            execute([sysctl_path, '-w', 'net.ipv6.conf.default.forwarding=1'])
+            execute([SYSCTL_PATH, '-w', 'net.ipv4.ip_forward=1'])
+            execute([SYSCTL_PATH, '-w', 'net.ipv6.conf.default.forwarding=1'])
         srv.run()
     except BaseException, e:
         s = "Slave node aborting: %s\n" % str(e)
