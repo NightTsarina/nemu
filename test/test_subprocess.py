@@ -200,7 +200,11 @@ class TestSubprocess(unittest.TestCase):
         os.close(r)
         pid = p.pid
         os.kill(pid, 0) # verify process still there
+        # Avoid the warning about the process being killed
+        orig_stderr = sys.stderr
+        sys.stderr = open("/dev/null", "w")
         p.destroy()
+        sys.stderr = orig_stderr
         self.assertRaises(OSError, os.kill, pid, 0) # should be dead by now
 
         p = node.Subprocess(['sleep', '100'])
@@ -249,14 +253,16 @@ class TestSubprocess(unittest.TestCase):
         p = node.Popen('cat', stdin = sp.PIPE)
         self.assertEquals(p.communicate(), (None, None))
 
-        p = node.Popen('cat >&2', shell = True, stdin = sp.PIPE, stderr = sp.PIPE)
+        p = node.Popen('cat >&2', shell = True, stdin = sp.PIPE,
+                stderr = sp.PIPE)
         p.stdin.write("hello world\n")
         p.stdin.close()
         self.assertEquals(p.stderr.readlines(), ["hello world\n"])
         self.assertEquals(p.stdout, None)
         self.assertEquals(p.wait(), 0)
 
-        p = node.Popen(['sh', '-c', 'cat >&2'], stdin = sp.PIPE, stderr = sp.PIPE)
+        p = node.Popen(['sh', '-c', 'cat >&2'], stdin = sp.PIPE,
+                stderr = sp.PIPE)
         self.assertEquals(p.communicate(_longstring), (None, _longstring))
 
         #
