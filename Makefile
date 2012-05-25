@@ -45,6 +45,8 @@ coverage-report: coverage_stamp
 	@echo "Coverage report created in $(COVERDIR)/index.html"
 
 coverage_stamp: build_stamp
+	if [ `id -u` -ne 0 ]; then \
+		echo "Coverage needs to be run as root."; false; fi
 	for i in `find "$(TEST)" -perm -u+x -type f`; do \
 		set -e; \
 		PYTHONPATH="$(BUILDDIR)" $(COVERAGE) -x $$i; \
