@@ -37,20 +37,10 @@ class TestIPRouteStuff(unittest.TestCase):
  
     def test_any_to_bool(self):
         a2b = nemu.iproute._any_to_bool
-        self.assertTrue(a2b(True))
-        self.assertTrue(a2b(2))
-        self.assertTrue(a2b('trUe'))
-        self.assertTrue(a2b('1'))
-        self.assertTrue(a2b('foo'))
-        self.assertTrue(a2b(1.0))
-        self.assertTrue(a2b([1]))
-        self.assertFalse(a2b(False))
-        self.assertFalse(a2b(0))
-        self.assertFalse(a2b('falsE'))
-        self.assertFalse(a2b('0'))
-        self.assertFalse(a2b(''))
-        self.assertFalse(a2b(0.0))
-        self.assertFalse(a2b([]))
+        for i in (True, 2, 'trUe', '1', 'foo', 1.0, [1]):
+            self.assertTrue(a2b(i))
+        for i in (False, 0, 'falsE', '0', '', 0.0, []):
+            self.assertFalse(a2b(i))
 
     def test_non_empty_str(self):
         nes = nemu.iproute._non_empty_str
