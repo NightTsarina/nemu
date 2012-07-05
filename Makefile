@@ -58,13 +58,14 @@ clean:
 	./setup.py clean
 	rm -f `find -name \*.pyc` .coverage *.pcap *_stamp
 	rm -rf $(COVERDIR)
-	$(MAKE) -C $(CURDIR)/benchmarks/ clean
+	#$(MAKE) -C $(CURDIR)/benchmarks/ clean
 
 distclean: clean
 	rm -rf "$(DISTDIR)"
 
 MANIFEST: distclean
 	find . -path ./.hg -prune -o -path ./build -prune -o \
+		-path ./benchmarks -prune -o \
 		-name \*.pyc -prune -o -name \*.swp -prune -o \
 		-name MANIFEST -prune -o -name .hg\* -prune -o \
 		-type f -print | sed 's#^\./##' | sort > MANIFEST

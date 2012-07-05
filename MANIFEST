@@ -1,13 +1,3 @@
-benchmarks/graph.py
-benchmarks/linear-raw-throughput.py
-benchmarks/Makefile
-benchmarks/preliminar/comparison-bynodes.gnuplot
-benchmarks/preliminar/comparison-bynodes.ps
-benchmarks/preliminar/comparison-bypkts.gnuplot
-benchmarks/preliminar/comparison-bypkts.ps
-benchmarks/preliminar/linear-raw-throughput.txt
-benchmarks/preliminar/results-simu.txt
-benchmarks/udp-perf.c
 COPYING
 DEPENDENCIES
 examples/sample.py
