@@ -66,8 +66,8 @@ distclean: clean
 MANIFEST: distclean
 	find . -path ./.hg -prune -o -path ./build -prune -o \
 		-name \*.pyc -prune -o -name \*.swp -prune -o \
-		-name MANIFEST -prune -o -type f -print | \
-		sed 's#^\./##' | sort > MANIFEST
+		-name MANIFEST -prune -o -name .hg\* -prune -o \
+		-type f -print | sed 's#^\./##' | sort > MANIFEST
 
 dist: MANIFEST
 	./setup.py sdist
