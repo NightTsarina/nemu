@@ -57,21 +57,16 @@ assert ret == 0
 print "Connectivity IPv4 OK!"
 
 if X:
-    app1 = node1.Popen("%s -geometry -0+0 -e %s -ni %s" %
-            (xterm, nemu.environ.TCPDUMP_PATH, if1b.name), shell = True)
-    time.sleep(3)
-    app0 = node0.Popen("%s -geometry +0+0 -e ping -c 10 10.0.1.2" % xterm,
-            shell = True)
-    app0.wait()
-    app1.signal()
-    app1.wait()
+    app = []
+    for i in range(SIZE):
+        app.append(node[i].Popen("%s -geometry 800x100+0+%d -e %s -eni %s" %
+            (i * 100, xterm, nemu.environ.TCPDUMP_PATH,
+                iface[(i, i + 1)].name),
+            shell=True))
+    app.append(node[-1].Popen(
+        "%s -geometry +0+0 -e ping -c 10 10.0.0.1" % xterm, shell = True))
 
-# Now test the network conditions
-# When using a args list, the shell is not needed
-app2 = node2.Popen(["ping", "-q", "-c100000", "-f", "10.0.1.2"],
-        stdout = subprocess.PIPE)
-
-out, err = app2.communicate()
-
-print "Ping outout:"
-print out
+    app[-1].wait()
+    for i in range(SIZE):
+        app[i].signal()
+        app[i].wait()
