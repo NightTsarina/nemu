@@ -62,6 +62,23 @@
   \end{itemize}
 \end{frame}
 
+\begin{frame}[fragile]{How does it look like?}
+\begin{semiverbatim}
+import nemu
+
+node0 = nemu.Node()
+node1 = nemu.Node()
+
+(if0, if1) = nemu.P2PInterface.create_pair(node0, node1)
+if0.up = if1.up = True
+
+if0.add_v4_address(address='10.0.0.1', prefix_len=24)
+if1.add_v4_address(address='10.0.0.2', prefix_len=24)
+
+node0.system("ping -c 5 10.0.0.2")
+\end{semiverbatim}
+\end{frame}
+
 \begin{frame}{Resources}
   Related projects:\\
   \begin{itemize}
@@ -73,9 +90,10 @@
 
   Links:\\
   \begin{itemize}
-  \item Nemu homepage: http://code.google.com/p/nemu/
-  \item NEPI homepage: http://nepi.pl.sophia.inria.fr/
-  \item Mailing list: http://groups.google.com/group/nemu-devel
+  \item Nemu homepage: \texttt{http://code.google.com/p/nemu/}
+  \item NEPI homepage: \texttt{http://nepi.pl.sophia.inria.fr/}
+  \item This slides + code:
+  \texttt{\$HOME/source/browse/docs/debconf-talk/}
   \end{itemize}
 \end{frame}
 \end{document}
