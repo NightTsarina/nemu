@@ -3,7 +3,11 @@
 import os, nemu, subprocess, time
 
 xterm = nemu.environ.find_bin("xterm")
+mtr = nemu.environ.find_bin("mtr")
 X = "DISPLAY" in os.environ and xterm
+
+# Do not use X stuff.
+X = False
 
 # each Node is a netns
 node = []
@@ -24,17 +28,21 @@ for i in range(SIZE):
         iface[(i, i - 1)].add_v4_address(address='10.0.%d.2' % (i - 1),
                 prefix_len=24)
         switch.append(nemu.Switch())
-        switch[-1].connect(iface[(i, i - 1)], iface[(i - 1, i)])
+        switch[-1].connect(iface[(i, i - 1)])
+        switch[-1].connect(iface[(i - 1, i)])
         switch[-1].up = True
     # Configure routing
-    if i < SIZE - 2:
-        node[i].add_route(prefix='10.0.%d.0' % (SIZE - 2), prefix_len=24,
-                nexthop='10.0.%d.2' % i)
-    if i > 1:
-        node[i].add_route(prefix='10.0.0.0', prefix_len=24,
-                nexthop='10.0.%d.1' % i - 1)
+    for j in range(SIZE - 1):
+        if j in (i, i - 1):
+            continue
+        if j < i:
+            node[i].add_route(prefix='10.0.%d.0' % j, prefix_len=24,
+                    nexthop='10.0.%d.1' % (i - 1))
+        else:
+            node[i].add_route(prefix='10.0.%d.0' % j, prefix_len=24,
+                    nexthop='10.0.%d.2' % i)
 
-print "Nodes started with pids: %s" % str([n.pid for n in nodes])
+print "Nodes started with pids: %s" % str([n.pid for n in node])
 
 #switch0 = nemu.Switch(
 #        bandwidth = 100 * 1024 * 1024,
@@ -58,15 +66,18 @@ print "Connectivity IPv4 OK!"
 
 if X:
     app = []
-    for i in range(SIZE):
-        app.append(node[i].Popen("%s -geometry 800x100+0+%d -e %s -eni %s" %
-            (i * 100, xterm, nemu.environ.TCPDUMP_PATH,
-                iface[(i, i + 1)].name),
-            shell=True))
-    app.append(node[-1].Popen(
-        "%s -geometry +0+0 -e ping -c 10 10.0.0.1" % xterm, shell = True))
+    for i in range(SIZE - 1):
+        height = 102
+        base = 25
+        cmd = "%s -eni %s" % (nemu.environ.TCPDUMP_PATH, iface[(i, i + 1)].name)
+        xtermcmd = "%s -geometry 100x5+0+%d -T %s -e %s" % (
+                xterm, i * height + base, "node%d" % i, cmd)
+        app.append(node[i].Popen(xtermcmd, shell=True))
 
+    app.append(node[-1].Popen("%s -n 10.0.0.1" % mtr, shell=True))
     app[-1].wait()
-    for i in range(SIZE):
+    for i in range(SIZE - 1):
         app[i].signal()
         app[i].wait()
+else:
+    node[-1].system("%s -n --report 10.0.0.1" % mtr)
