@@ -7,3 +7,5 @@ python-passfd		http://pypi.python.org/pypi/python-passfd
 linux-kernel >= 2.6.35	http://kernel.org/
 bridge-utils
 iproute
+procps
+xauth			Needed only for X11 forwarding support.
