@@ -62,8 +62,10 @@ def get_devs_netns(node):
     return process_ipcmd(out)
 
 def make_linux_ver(string):
-    match = re.match(r'(\d+)\.(\d+)\.(\d+)(.*)', string)
+    match = re.match(r'(\d+)\.(\d+)(?:\.(\d+))?(.*)', string)
     version, patchlevel, sublevel, extraversion = match.groups()
+    if not sublevel:
+        sublevel = 0
     return (int(version) << 16) + (int(patchlevel) << 8) + int(sublevel)
 
 def get_linux_ver():
