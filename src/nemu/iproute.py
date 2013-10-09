@@ -434,9 +434,10 @@ def get_addr_data():
             raise RuntimeError("Invalid `ip' command output")
         idx = int(match.group(1))
         name = match.group(2)
-        if match.group(3):
+        if name not in bynam:
             bynam[name] = byidx[idx] = []
-            continue # link info
+            if match.group(3): # BBB: old iproute also shows link info
+                continue
         bynam[name].append(_parse_ip_addr(match.group(4)))
     return byidx, bynam
 
