@@ -1,0 +1,99 @@
+% vim:ts=2:sw=2:et:ai:sts=2
+\documentclass{beamer}
+\mode<presentation>
+{
+  \usetheme{Boadilla} % simple
+  \usecolortheme{seahorse}
+  \useinnertheme{rectangles}
+}
+
+\usepackage[english]{babel}
+\usepackage[utf8]{inputenc}
+\usepackage[normalem]{ulem}
+
+\DeclareRobustCommand{\hsout}[1]{\texorpdfstring{\sout{#1}}{#1}}
+\pgfdeclareimage[height=0.5cm]{debian-logo}{openlogo}
+\pgfdeclareimage[height=2cm]{debian-logo-big}{openlogo}
+
+\title{Introducing Nemu}
+\subtitle{Network EMUlator in a \hsout{box} Python library}
+
+\author{Martín Ferrari}
+\institute[DebConf 12]{\pgfuseimage{debian-logo-big}}
+
+\date{July 14, 2012}
+\subject{Talks}
+\logo{\pgfuseimage{debian-logo}}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+\begin{frame}{What is Nemu?}
+  \begin{itemize}
+  \item A \alert{python} library,
+  \item to create \alert{emulated networks},
+  \item and run \alert{tests and experiments}
+  \item that can be \alert{repeated}.
+  \item[]{}
+  \item[] \em{A by-product of research that found a practical use.}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}{What can I use it for?}
+  \begin{itemize}
+  \item Test your new peer-to-peer application.
+  \item[] \small{\em{Run 50 instances in your machine!}}
+  \vfill
+  \item Observe behaviour on unreliable networks.
+  \item[] \small{\em{Configure packet loss, delay, throughput...}}
+  \vfill
+  \item Justify your changes with experimental data.
+  \item[] \small{\em{Make your script output nice GNUPlot graphs!}}
+  \vfill
+  \item Verify configuration changes before applying to the production network.
+  \item[] \small{\em{Change iptables and routing configuration with
+  confidence!}}
+  \vfill
+  \item Distribute your experiment/test easily, no configuration needed!
+  \item[] \small{\em{Here, execute this and see for yourself!}}
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[fragile]{How does it look like?}
+\begin{semiverbatim}
+import nemu
+
+node0 = nemu.Node()
+node1 = nemu.Node()
+
+(if0, if1) = nemu.P2PInterface.create_pair(node0, node1)
+if0.up = if1.up = True
+
+if0.add_v4_address(address='10.0.0.1', prefix_len=24)
+if1.add_v4_address(address='10.0.0.2', prefix_len=24)
+
+node0.system("ping -c 5 10.0.0.2")
+\end{semiverbatim}
+\end{frame}
+
+\begin{frame}{Resources}
+  Related projects:\\
+  \begin{itemize}
+  \item NEPI: original project that spawned the development of Nemu.\\
+  High-level network description, GUI, multiple back-ends.
+  \item Mininet: similar project from Stanford, developed at the same time.
+  \end{itemize}
+  \hfill
+
+  Links:\\
+  \begin{itemize}
+  \item Nemu homepage: \texttt{http://code.google.com/p/nemu/}
+  \item NEPI homepage: \texttt{http://nepi.pl.sophia.inria.fr/}
+  \item This slides + code:
+  \texttt{\$HOME/source/browse/docs/debconf-talk/}
+  \end{itemize}
+\end{frame}
+\end{document}

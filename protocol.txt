@@ -1,0 +1,93 @@
+Protocol format:
+----------------
+
+RFC 2821-like.
+
+At start-up, server sends 220 code and greeting text
+
+To close the connection and the node, client sends QUIT command, and server
+replies with 221 code.
+
+Command	Subcmd	Arguments	Response		Effect
+QUIT				221			Close the netns
+IF	LIST	[if#]		200 serialised data	ip link list
+IF	SET	if# k v k v...	200/500			ip link set (1)
+IF	RTRN	if# ns		200/500			ip link set netns $ns
+IF	DEL	if# 		200/500			ip link del
+ADDR	LIST	[if#]		200 serialised data	ip addr list
+ADDR	ADD	if# addr_spec	200/500			ip addr add
+ADDR	DEL	if# addr_spec	200/500			ip addr del
+ROUT	LIST			200 serialised data	ip route list
+ROUT	ADD	route_spec	200/500			ip route add
+ROUT	DEL	route_spec	200/500			ip route del
+PROC	CRTE	argv0 argv1...	200/500			(2)
+PROC	USER	username	200/500			(3)
+PROC	CWD	cwd		200/500			(3)
+PROC	ENV	k v k v...	200/500			(3)
+PROC	SIN			354+200/500		(4)
+PROC	SOUT			354+200/500		(4)
+PROC	SERR			354+200/500		(4)
+PROC	RUN			200 <pid>/500		(5)
+PROC	ABRT			200			(5)
+PROC	POLL	<pid>		200 <code>/450/500	check if process alive
+PROC	WAIT	<pid>		200 <code>/500		waitpid(pid)
+PROC	KILL	<pid> <signal>	200/500			kill(pid, signal)
+X11		<prot> <data>	354+200/500		(6)
+
+(1) valid arguments: mtu <n>, up <0|1>, name <name>, lladdr <addr>,
+broadcast <addr>, multicast <0|1>, arp <0|1>.
+
+(2) After PROC CRTE, only secondary PROC cmds are accepted until finished.
+The parameters are parsed as base64-encoded strings if they start with a '='
+character.
+
+(3) Secondary PROC commands, only valid after PROC CRTE. All parameters parsed
+as base64-encoded strings. Arguments for PROC ENV are pairs of key-value to
+set up the process environment.
+
+(4) Secondary PROC commands, only valid after PROC CRTE. Server reply 354 and
+waits for a file descriptor to be passed along with a duplicate of the same
+command. Answers 200/500 after processing the file descriptor.
+
+(5) Secondary PROC commands, unconditionally end the PROC transaction. If RUN
+was successful, the process is started and the process ID is returned as the
+first token of the reply.
+
+(6) Enable X11 forwarding, using the specified protocol and data for
+authentication. A opened socket ready to receive X connections is passed over
+the channel. Answers 200/500 after transmitting the file descriptor.
+
+Sample session
+--------------
+
+Parent calls socketpair(), fork() and unshare(); thus creating a new netns;
+protocol exchanges occur through the socket.
+
+<S> 220 Hello
+<C> IF LIST
+<S> 200-[{id: 1, mtu: 16436, name: lo, up: true}, {id: 10,
+<S> 200     lladdr: '12:34:56:78:9a:bc', mtu: 1500, name: eth0, up: true}]
+<C> IF SET 10 MTU 1492
+<S> 200 Ok.
+<C> ADDR ADD 10 10.0.0.1 24 10.0.0.255
+<S> 200 Ok.
+<C> ADDR DEL 10 192.168.1.1 24
+<S> 500 Address does not exist.
+<C> PROC CRTE /bin/sh sh -c sleep 10
+<S> 200 Entering PROC mode.
+<C> PROC USER nobody
+<S> 200 Program will run as `nobody'.
+<C> PROC CWD /
+<S> 200 CWD set to /.
+<C> PROC SIN
+<S> 354 Waiting for FD.
+ Server calls recvmsg()
+ Client calls sendmsg()
+<S> 200 FD received OK.
+<C> PROC RUN
+<S> 200 1649 pid process started.
+<C> PROC WAIT 1649
+ Time passes...
+<S> 200 0 exit code
+<C> QUIT
+<S> 221 Exiting...

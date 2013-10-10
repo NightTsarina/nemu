@@ -1,0 +1,123 @@
+#/usr/bin/env python
+# vim:ts=4:sw=4:et:ai:sts=4
+import nemu
+import signal
+
+# run_as: user to setuid() to before running applications (this is assumed to
+# run as root)
+nemu.config.run_as = 'nobody'
+
+# Clean-up is essential to avoid leaving bridge devices all over the place
+# (luckily, the veths die automatically). This installs signals and exit
+# handlers.
+nemu.set_cleanup_hooks(on_exit = True,
+        on_signals = [signal.SIGTERM, signal.SIGINT])
+
+# each Node is a netns
+a = nemu.Node()
+b = nemu.Node()
+print "Nodes started with pids: %d and %d" % (a.pid, b.pid)
+
+# interface object maps to a veth pair with one end in a netns
+if0 = a.add_if(lladdr = '42:71:e0:90:ca:42')
+# This is equivalent
+#if0 = nemu.NodeInterface(a)
+#if0.lladdr = '42:71:e0:90:ca:42'
+
+if1 = b.add_if(mtu = 1492)
+
+# for using with a tun device, to connect to the outside world
+if2 = b.import_if('tun0')
+
+# each Switch is a linux bridge, all the parameters are applied to the
+# associated interfaces as tc qdiscs.
+switch0 = nemu.Switch(bandwidth = 100 * 1024 * 1024,
+        delay = 0.01, delay_jitter = 0.001,
+        delay_correlation = 0.25, delay_distribution = 'normal',
+        loss = 0.005, loss_correlation = 0.20,
+        dup = 0.005, dup_correlation = 0.25,
+        corrupt = 0.005, corrupt_correlation = 0.25)
+
+# connect to the bridge
+switch0.connect(if0)
+switch0.connect(if1)
+
+# Should be experimented with Tom Geoff's patch to see if the bridge could be
+# avoided; but for that the API would be slightly different, as these would be
+# point-to-point interfaces and links.
+# ppp0 = nemu.PPPSwitch(a, b, bandwidth = ....)
+# if0 = ppp0.interface(a)
+
+# For now, we have simple P2P interfaces:
+(pppa, pppb) = nemu.P2PInterface.create_pair(a, b)
+
+# Add and connect a tap device (as if a external router were plugged into a
+# switch)
+if2 = nemu.ImportedInterface('tap0')
+switch0.connect(if2)
+
+switch0.up = True
+if0.up = True
+if1.up = True
+
+# addresses as iproute
+if0.add_v4_address(addr = '10.0.0.1', prefix_len = 24)
+if0.add_v6_address(addr = 'fe80::222:19ff:fe22:615d', prefix_len = 64)
+if1.add_v4_address(addr = '10.0.0.2', prefix_len = 24,
+        broadcast = '10.1.0.255')
+
+# ditto
+#a.add_route(prefix = '0', prefix_len = 0, nexthop = '10.0.0.2')
+a.add_default_route(nexthop = '10.0.0.2')
+b.add_route(prefix = '10.1.0.0', prefix_len = 16, nexthop = '10.0.0.1')
+b.add_route(prefix = '11.1.0.1', prefix_len = 32, device = if1)
+
+# Some inspection methods: they will not read internal data but query the
+# kernel
+addrs = if0.get_addresses()
+stats = if0.get_stats()
+routes = a.get_routes()
+ifaces = a.get_interfaces()
+nodes = nemu.get_nodes()
+switches = nemu.get_switches()
+stats = link0.get_stats()
+
+# Run a process in background
+import subprocess
+app0 = a.Popen("ping -c 3 10.0.0.2", shell = True, stdout = subprocess.PIPE)
+print app0.stdout.readline()
+app0.wait()
+
+# Run, capture output and wait()
+stdout = a.backticks(["ping", "-c", "3", "10.0.0.2"])
+
+# Run an process with a pseudo-tty associated to it; provide a UNIX socket to
+# interact with the process
+app2 = a.start_tty_process("/bin/bash")
+# app2.sockname, app2.sockfd
+app2.wait()
+
+# Example to set up a linear topology
+def setup_linear_topology(n, bd, delay):
+    nodes = []
+    for i in range(n):
+        nodes.append(nemu.Node())
+
+    for i in range(n - 1):
+        if1 = nodes[i].add_if()
+        if2 = nodes[i + 1].add_if()
+        if1.add_v4_address(addr = ('10.0.%d.2' % i), prefix_len = 24)
+        if2.add_v4_address(addr = ('10.0.%d.1' % i), prefix_len = 24)
+        switch = nemu.Switch(bandwidth = bd, delay = delay)
+        switch.connect(if1)
+        switch.connect(if2)
+
+    for i in range(n):
+        for j in range(n):
+            if abs(i - j) <= 1:
+                continue
+            nodes[i].add_route(prefix = ('10.0.%d.0' % j), prefix_len = 24,
+                    nexthop = ('10.0.%d.%d' % ((i, 1) if i < j else (i - 1, 2)))
+                    )
+    return nodes
+
