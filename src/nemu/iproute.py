@@ -422,40 +422,48 @@ def change_netns(iface, netns):
 # Address handling
 
 def get_addr_data():
-    ipdata = backticks([IP_PATH, "-o", "addr", "list"])
+    ipdata = backticks([IP_PATH, "addr", "list"])
 
     byidx = {}
     bynam = {}
+
+    current = None
     for line in ipdata.split("\n"):
         if line == "":
             continue
-        match = re.search(r'^(\d+):\s+(\S+?)(:?)\s+(.*)', line)
-        if not match:
-            raise RuntimeError("Invalid `ip' command output")
-        idx = int(match.group(1))
-        name = match.group(2)
-        if name not in bynam:
+        match = re.search(r'^(\d+):\s+(\S+):', line)
+        if match:
+            # First line of output.
+            idx = int(match.group(1))
+            name = match.group(2)
+            current = name
+            if name in bynam:
+                raise RuntimeError("Invalid `ip' command output")
             bynam[name] = byidx[idx] = []
-            if match.group(3): # BBB: old iproute also shows link info
-                continue
-        bynam[name].append(_parse_ip_addr(match.group(4)))
-    return byidx, bynam
+            continue
 
-def _parse_ip_addr(line):
-    match = re.search(r'^inet ([0-9.]+)/(\d+)(?: brd ([0-9.]+))?', line)
-    if match != None:
-        return ipv4address(
+        if not current:
+            raise RuntimeError("Invalid `ip' command output")
+
+        match = re.search(r'^\s*inet ([0-9.]+)/(\d+)(?: brd ([0-9.]+))?', line)
+        if match:
+            bynam[current].append(ipv4address(
                 address     = match.group(1),
                 prefix_len  = match.group(2),
-                broadcast   = match.group(3))
+                broadcast   = match.group(3)))
+            continue
 
-    match = re.search(r'^inet6 ([0-9a-f:]+)/(\d+)', line)
-    if match != None:
-        return ipv6address(
+        match = re.search(r'^\s*inet6 ([0-9a-f:]+)/(\d+)', line)
+        if match:
+            bynam[current].append(ipv6address(
                 address     = match.group(1),
-                prefix_len  = match.group(2))
+                prefix_len  = match.group(2)))
+            continue
 
-    raise RuntimeError("Problems parsing ip command output")
+        # Extra info, ignored.
+        continue
+
+    return byidx, bynam
 
 def add_addr(iface, address):
     ifname = _get_if_name(iface)
