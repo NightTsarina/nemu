@@ -12,7 +12,8 @@ def process_ipcmd(str):
         if line == "":
             cur = None
             continue
-        match = re.search(r'^(\d+): (\S+): <(\S+)> mtu (\d+) qdisc (\S+)',
+        match = re.search(r'^(\d+): ([^@\s]+)(?:@\S+)?: <(\S+)> mtu (\d+) '
+                          r'qdisc (\S+)',
                 line)
         if match != None:
             cur = match.group(2)

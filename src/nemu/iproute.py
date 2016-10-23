@@ -308,8 +308,9 @@ def get_if_data():
             continue
         match = re.search(r'^(\d+):\s+(.*)', line)
         idx = int(match.group(1))
-        match = re.search(r'^(\d+): (\S+): <(\S+)> mtu (\d+) qdisc \S+' +
-                r'.*link/\S+(?: ([0-9a-f:]+) brd ([0-9a-f:]+))?', line)
+        match = re.search(r'^(\d+): ([^@\s]+)(?:@\S+)?: <(\S+)> mtu (\d+) '
+                          r'qdisc \S+.*link/\S+(?: ([0-9a-f:]+) '
+                          r'brd ([0-9a-f:]+))?', line)
         flags = match.group(3).split(",")
         i = interface(
                 index   = match.group(1),
@@ -431,7 +432,7 @@ def get_addr_data():
     for line in ipdata.split("\n"):
         if line == "":
             continue
-        match = re.search(r'^(\d+):\s+(\S+):', line)
+        match = re.search(r'^(\d+):\s+([^@\s]+)(?:@\S+)?:', line)
         if match:
             # First line of output.
             idx = int(match.group(1))
