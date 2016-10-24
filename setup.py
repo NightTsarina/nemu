@@ -6,7 +6,7 @@ from distutils.core import setup, Extension, Command
 
 setup(
         name        = 'nemu',
-        version     = '0.2',
+        version     = '0.3',
         description = 'A lightweight network emulator embedded in a small '
                       'python library.',
         author      = 'Martín Ferrari, Alina Quereilhac',
