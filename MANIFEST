@@ -1,9 +1,11 @@
+BUILDING.md
 COPYING
-DEPENDENCIES
+docs/protocol.txt
+docs/sample-api.txt
+docs/X11Forwarding.md
 examples/sample.py
 Makefile
-protocol.txt
-sample-api.txt
+README.md
 setup.cfg
 setup.py
 src/nemu/environ.py
@@ -21,3 +23,4 @@ test/test_routing.py
 test/test_subprocess.py
 test/test_switch.py
 test/test_util.py
+TODO.md

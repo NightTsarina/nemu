@@ -64,7 +64,8 @@ distclean: clean
 	rm -rf "$(DISTDIR)"
 
 MANIFEST: distclean
-	find . -path ./.hg -prune -o -path ./build -prune -o \
+	find . -path ./.git\* -prune -o -path ./build -prune -o \
+		-path ./docs/debconf-talk -prune -o \
 		-path ./benchmarks -prune -o \
 		-name \*.pyc -prune -o -name \*.swp -prune -o \
 		-name MANIFEST -prune -o -name .hg\* -prune -o \
