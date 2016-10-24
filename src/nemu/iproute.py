@@ -688,7 +688,7 @@ def get_tc_tree():
         if line == "":
             continue
         match = re.match(r'qdisc (\S+) ([0-9a-f]+):[0-9a-f]* dev (\S+) ' +
-                r'(?:parent ([0-9a-f]+):[0-9a-f]*|root)\s*(.*)', line)
+                r'(?:parent ([0-9a-f]*):[0-9a-f]*|root)\s*(.*)', line)
         if not match:
             raise RuntimeError("Invalid output from `tc qdisc': `%s'" % line)
         qdisc = match.group(1)
@@ -696,11 +696,15 @@ def get_tc_tree():
         iface = match.group(3)
         parent = match.group(4) # or None
         extra = match.group(5)
+        if parent == "":
+            # XXX: Still not sure what is this, shows in newer kernels for wlan
+            # interfaces.
+            continue
         if iface not in data:
             data[iface] = {}
         if parent not in data[iface]:
             data[iface][parent] = []
-        data[iface][parent] += [[handle, qdisc, parent, extra]]
+        data[iface][parent].append([handle, qdisc, parent, extra])
 
     tree = {}
     for iface in data:
@@ -789,7 +793,7 @@ def get_tc_data():
             continue
         node = tree[ifdata[0][i].name]
         if not node["children"]:
-            if node["qdisc"] == "mq" or node["qdisc"] == "pfifo_fast" \
+            if node["qdisc"] in ("mq", "pfifo_fast", "noqueue") \
                     or node["qdisc"][1:] == "fifo":
                 continue
 
