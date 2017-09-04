@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python2
 # vim:ts=4:sw=4:et:ai:sts=4
 
 import os, re, subprocess, sys
