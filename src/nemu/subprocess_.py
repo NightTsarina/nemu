@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 # Copyright 2010, 2011 INRIA
-# Copyright 2011 Martín Ferrari <martin.ferrari@gmail.com>
+# Copyright 2011 Martina Ferrari <tina@tina.pm>
 #
 # This file is part of Nemu.
 #
